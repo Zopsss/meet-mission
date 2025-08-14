@@ -133,6 +133,67 @@ exports.delete = async function (req, res) {
 };
 
 /*
+ * group.cancel()
+ * Cancel a group and issue vouchers to its members
+ */
+exports.cancel = async function (req, res) {
+  const id = req.params.id;
+  try {
+    utility.validate(id);
+    const groupDataArr = await group.getById({ id: new mongoose.Types.ObjectId(id) });
+    const groupData = Array.isArray(groupDataArr) ? groupDataArr[0] : groupDataArr;
+    utility.assert(groupData, 'Group not found');
+
+    const eventId = groupData.event_id;
+    const eventModel = require('../model/event-management');
+    const eventData = await eventModel.getById({ id: new mongoose.Types.ObjectId(eventId) });
+
+    const teamIds = (groupData.team_ids || []).map(t => t._id || t);
+    const teams = await mongoose.model('Team').find({ _id: { $in: teamIds } }).lean();
+    const memberIds = [...new Set((teams.flatMap(t => t.members || []))).map(id => new mongoose.Types.ObjectId(id))];
+
+    const RegisteredParticipant = mongoose.model('RegisteredParticipant');
+    const participants = await RegisteredParticipant.find({
+      event_id: new mongoose.Types.ObjectId(eventId),
+      user_id: { $in: memberIds },
+      status: 'registered',
+      $or: [ { is_cancelled: false }, { is_cancelled: { $exists: false } } ]
+    });
+
+    const stripe = require('../model/stripe');
+    const moment = require('moment-timezone');
+    const redeemBy = Math.floor(moment().add(24, 'months').valueOf() / 1000);
+
+    for (const p of participants) {
+      try {
+        await RegisteredParticipant.findByIdAndUpdate(p._id, { status: 'canceled', is_cancelled: true, cancel_date: new Date() });
+
+        // Amount equals what THIS user actually paid
+        const txDocs = await mongoose.model('Transaction').find({
+          user_id: new mongoose.Types.ObjectId(p.user_id),
+          event_id: new mongoose.Types.ObjectId(eventId),
+          status: 'paid',
+          type: 'Register Event'
+        }).lean();
+        const amountOffCents = Math.round(
+          (txDocs || []).reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount * 100 : 0), 0)
+        );
+        if (!amountOffCents) throw new Error('No paid transaction found for this user');
+
+        const coupon = await stripe.coupon.createOnce({ amount_off: amountOffCents, currency: 'eur', redeem_by: redeemBy, name: `Voucher - ${eventData.tagline}`, metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_group_cancellation', group_id: String(id) } });
+        const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+        const promo = await stripe.promotionCode.create({ coupon: coupon.id, code, expires_at: redeemBy, max_redemptions: 1, metadata: { user_id: String(p.user_id), event_id: String(eventId), coupon_id: coupon.id, group_id: String(id) } });
+
+        await mail.send({ to: p.email, locale: p.locale || req.locale || 'de', custom: true, template: 'event_cancelled', subject: req.__('payment.cancelled_event_admin.subject', { city: eventData.city?.name }), content: { name: `${p.first_name} ${p.last_name}`, body: req.__('payment.cancelled_event_admin.body', { event: eventData.tagline, code: promo.code, date: moment.unix(redeemBy).format('YYYY-MM-DD') }), button_url: process.env.CLIENT_URL, button_label: req.__('payment.cancelled_event_admin.button') } });
+      } catch (e) { console.error('Group cancel failed for participant', p?._id, e); }
+    }
+
+    return res.status(200).send({ data: true, affected: participants.length });
+  } catch (err) {
+    return res.status(400).send({ error: err.message });
+  }
+};
+/*
  * group.getGroupsByEventId()
  */
 exports.getGroupsByEventId = async function (req, res) {

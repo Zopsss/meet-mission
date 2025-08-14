@@ -9,6 +9,7 @@ api.get('/api/group/:id', auth.verify('master'), use(groupController.getById));
 api.patch('/api/group/:id', auth.verify('master'), use(groupController.update));
 api.post('/api/group', auth.verify('master'), use(groupController.create));
 api.delete('/api/group/:id', auth.verify('master'), use(groupController.delete));
+api.put('/api/group/cancel/:id', auth.verify('master'), use(groupController.cancel));
 
 
 module.exports = api;

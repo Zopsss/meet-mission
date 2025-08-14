@@ -1,0 +1,8 @@
+{
+  "cancelled_event_admin": {
+    "subject": "{{city}} - Event cancelled by admin",
+    "body": "The event {{event}} has been cancelled by our team. Your voucher code: {{code}}. Valid until: {{date}}. You can redeem it on your next booking.",
+    "button": "To Meetlocal"
+  }
+}
+

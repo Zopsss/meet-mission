@@ -221,11 +221,81 @@ exports.getLocations = async function (req, res) {
  */
 exports.cancel = async function (req, res) {
   const id = req.params.id;
-  const isCanceled = req.body.isCanceled || false;
+  const isCanceled = req.body.isCanceled ?? true;
   try {
     utility.validate(id);
-    await event.cancel({ id: new mongoose.Types.ObjectId(id), isCanceled });
-    return res.status(200).send({ message: `Event canceled` });
+    const eventId = new mongoose.Types.ObjectId(id);
+    const eventData = await event.getById({ id: eventId });
+    utility.assert(eventData, 'Event not found');
+
+    // Update the event flag
+    await event.cancel({ id: eventId, isCanceled });
+
+    if (isCanceled) {
+      // Issue vouchers to all registered participants regardless of timing
+      const participants = await registeredParticipant.getRegistered({ event_id: eventId, isValid: true });
+
+      const stripe = require('../model/stripe');
+      const moment = require('moment-timezone');
+      const redeemBy = Math.floor(moment().add(24, 'months').valueOf() / 1000);
+
+      for (const p of participants) {
+        try {
+          // Cancel registration
+          await mongoose.model('RegisteredParticipant').findByIdAndUpdate(p._id, {
+            status: 'canceled', is_cancelled: true, cancel_date: new Date()
+          });
+
+          // Amount equals what THIS user actually paid
+          const txDocs = await mongoose.model('Transaction').find({
+            user_id: new mongoose.Types.ObjectId(p.user_id),
+            event_id: eventId,
+            status: 'paid',
+            type: 'Register Event'
+          }).lean();
+          const amountOffCents = Math.round(
+            (txDocs || []).reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount * 100 : 0), 0)
+          );  
+          if (!amountOffCents) throw new Error('No paid transaction found for this user');
+
+          // Create amount-based coupon equal to what user paid
+          const coupon = await stripe.coupon.createOnce({
+            amount_off: amountOffCents,
+            currency: 'eur',
+            redeem_by: redeemBy,
+            name: `Voucher - ${eventData.tagline}`,
+            metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_event_cancellation' }
+          });
+          const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+          const promo = await stripe.promotionCode.create({
+            coupon: coupon.id,
+            code,
+            expires_at: redeemBy,
+            max_redemptions: 1,
+            metadata: { user_id: String(p.user_id), event_id: String(eventId), coupon_id: coupon.id }
+          });
+
+          // Email user
+          await mail.send({
+            to: p.email,
+            locale: p.locale || req.locale || 'de',
+            custom: true,
+            template: 'event_cancelled',
+            subject: req.__('payment.cancelled_event_admin.subject', { city: eventData.city?.name }),
+            content: {
+              name: `${p.first_name} ${p.last_name}`,
+              body: req.__('payment.cancelled_event_admin.body', { event: eventData.tagline, code: promo.code, date: moment.unix(redeemBy).format('YYYY-MM-DD') }),
+              button_url: process.env.CLIENT_URL,
+              button_label: req.__('payment.cancelled_event_admin.button')
+            }
+          });
+        } catch (e) {
+          console.error('Voucher/email failed for participant', p?._id, e);
+        }
+      }
+    }
+
+    return res.status(200).send({ message: `Event ${isCanceled ? 'canceled' : 'restored'}` });
   } catch (err) {
     return res.status(400).send({ error: err.message });
   }

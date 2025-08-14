@@ -43,7 +43,7 @@ exports.send = async function(data){
 		// get content from db
 		const content = data.content;
 
-		const html = await createEmail({ template: data.html_template || 'template', content: content || data.content, values: data.content }); // create html template
+        const html = await createEmail({ template: data.html_template || 'template', content: data.custom ? data.content : content, values: data.content }); // create html template
 
 		try {
 		const datas = await transport.sendMail({
