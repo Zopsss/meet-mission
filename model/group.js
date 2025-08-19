@@ -5,7 +5,7 @@ const GroupSchema = new Schema({
   event_id: { type: Schema.Types.ObjectId, ref: 'EventManagement', required: true },
   slot: { type: Number, required: true },
   group_name: { type: String, required: true },
-  age_group: { type: String, enum: ['18–30', '31–40', '41–50+'], required: true },
+  age_group: { type: String, enum: ['18-30', '31-40', '41+'], required: true },
   bar_id: { type: Schema.Types.ObjectId, ref: 'Location', required: true },
   team_ids: [{ type: Schema.Types.ObjectId, ref: 'Team', required: true }],
   status: { type: String, default: 'Active'},
@@ -26,7 +26,7 @@ exports.add = async function ({ group, eventId }) {
     age_group: group.age_group,
     bar_id: new mongoose.Types.ObjectId(group.bar_id),
     team_ids: group.team_ids.map(id => new mongoose.Types.ObjectId(id)),
-    ...team.method && { method: team.method }
+    ...group.method && { method: group.method }
   });
 
   return await data.save();
@@ -37,37 +37,35 @@ exports.add = async function ({ group, eventId }) {
 */
 exports.get = async function ({ eventId }) {
   const data = await Group.aggregate([
-    {
-      $match: {
-        event_id: new mongoose.Types.ObjectId(eventId),
-      },
-    },
+    { $match: { event_id: new mongoose.Types.ObjectId(eventId) } },
     {
       $lookup: {
         from: 'teams',
-        localField: 'team_ids',
-        foreignField: '_id',
-        as: 'teams',
-      },
+        let: { team_ids: '$team_ids' },
+        pipeline: [
+          { $match: { $expr: { $in: ['$_id', '$$team_ids'] } } }
+        ],
+        as: 'teams'
+      }
     },
     {
       $addFields: {
         total_members: {
-          $sum: {
-            $map: {
-              input: '$teams',
-              as: 'team',
-              in: { $size: '$$team.members' },
-            },
-          },
-        },
+          $reduce: {
+            input: '$teams',
+            initialValue: 0,
+            in: {
+              $add: [
+                '$$value',
+                { $size: { $ifNull: ['$$this.members', []] } }
+              ]
+            }
+          }
+        }
       },
     },
-    {
-      $sort: { createdAt: -1 }
-    }
+    { $sort: { createdAt: -1 } },
   ]);
-
   return data;
 };
 

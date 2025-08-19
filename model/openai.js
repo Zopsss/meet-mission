@@ -6,8 +6,9 @@ exports.text = async function({ prompt }){
   const res = await openai.chat.completions.create({
 
     model: 'gpt-4-turbo',
-    messages: [{ role: 'user', content: prompt }]
-
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0,
+    response_format: { type: 'json_object' }
   });
 
   return res?.choices?.[0].message?.content?.replace(/^\n+/, '');

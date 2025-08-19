@@ -52,10 +52,8 @@ async function runAIJobForEndEventReminder() {
 // 0 8 * * *
 cron.schedule('0 8 * * *', () => {
   const now = moment().tz('Europe/Berlin');
-  if (now.hour() === 8) {
-    console.log('Running AI Grouping job at:', now.format());
-    runAIJobForGrouping();
-  }
+  console.log('Running AI Grouping job at:', now.format());
+  runAIJobForGrouping();
 }, {
   timezone: 'Europe/Berlin'
 });

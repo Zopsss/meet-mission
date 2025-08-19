@@ -3,7 +3,7 @@ const { Schema } = mongoose;
 
 const TeamSchema = new Schema({
   event_id: { type: Schema.Types.ObjectId, ref: 'EventManagement', required: true },
-  age_group: { type: String, enum: ['18–30', '31–40', '41–50+'], required: true },
+  age_group: { type: String, enum: ['18-30', '31-40', '41+'], required: true },
   members: [
     {
       type: Schema.Types.ObjectId,
@@ -24,7 +24,7 @@ exports.add = async function ({ team, eventId }) {
   const data = new Team({
     event_id: new mongoose.Types.ObjectId(eventId),
     age_group: team.age_group,
-    members: team.members.map(member => new mongoose.Types.ObjectId(member.id)),
+    members: team.members.map(member => new mongoose.Types.ObjectId(member.user_id)),
     ...team.method && { method: team.method }
   });
 

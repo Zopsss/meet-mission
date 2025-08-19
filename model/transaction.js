@@ -26,6 +26,17 @@ const TransactionSchema = new Schema({
 const Transaction = mongoose.model('Transaction', TransactionSchema, 'transactions');
 exports.schema = Transaction;
 
+function calculateAge(dateOfBirth) {
+  const dob = new Date(dateOfBirth);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 /*
 * transaction.getById()
 */
@@ -71,4 +82,44 @@ exports.getByEventIdCron = async function ({ event_id }) {
     .populate('invited_user_id', '_id date_of_birth name');;
 
   return data;
+};
+
+/*
+* transaction.getParticipantsCron()
+*/
+exports.getParticipantsCron = async function ({ event_id }) {
+  let data = await Transaction
+    .find({ event_id, status: 'paid' })
+    .populate('user_id', `
+      _id name gender date_of_birth looking_for relationship_goal 
+      children kind_of_person feel_around_new_people 
+      prefer_spending_time describe_you_better describe_role_in_relationship
+    `)
+    .populate('invited_user_id', `
+      _id name gender date_of_birth looking_for relationship_goal 
+      children kind_of_person feel_around_new_people 
+      prefer_spending_time describe_you_better describe_role_in_relationship
+    `)
+    .lean(); // ensures plain JS objects
+
+  // Return only the populated user data
+  return data.map(item => ({
+    user_id: item.user_id?._id,
+    name: item.user_id?.name,
+    gender: item.user_id?.gender,
+    age: calculateAge(item.user_id?.date_of_birth),
+    looking_for: item.user_id?.looking_for,
+    relationship_goal: item.user_id?.relationship_goal,
+    children: item.user_id?.children,
+    kind_of_person: item.user_id?.kind_of_person,
+    feel_around_new_people: item.user_id?.feel_around_new_people,
+    prefer_spending_time: item.user_id?.prefer_spending_time,
+    describe_you_better: item.user_id?.describe_you_better,
+    describe_role_in_relationship: item.user_id?.describe_role_in_relationship,
+    invited_user_id: item.invited_user_id && {
+      ...item.invited_user_id,
+      age: calculateAge(item.invited_user_id?.date_of_birth),
+      user_id: item.invited_user_id._id
+    }
+  }));
 };
