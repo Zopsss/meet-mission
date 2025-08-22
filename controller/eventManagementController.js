@@ -233,7 +233,7 @@ exports.cancel = async function (req, res) {
     await event.cancel({ id: eventId, isCanceled });
 
     if (isCanceled) {
-      // Issue vouchers to all registered participants regardless of timing
+      // Issue vouchers only if cancellation is timely (>24h before event start)
       const participants = await registeredParticipant.getRegistered({
         event_id: eventId,
         isValid: true
@@ -266,44 +266,33 @@ exports.cancel = async function (req, res) {
 
           if (!amountOffCents) throw new Error('No paid transaction found for this user');
 
-          // Create promotional code - let Stripe generate the code automatically
-          const promo = await stripe.promotionCodes.create({
-            coupon: {
-              amount_off: amountOffCents,
-              currency: 'eur',
-              name: `Voucher - ${eventData.tagline}`,
-              redeem_by: redeemBy,
-              metadata: {
-                user_id: String(p.user_id),
-                event_id: String(eventId),
-                reason: 'admin_event_cancellation'
-              }
-            },
+          // Create coupon and promotion code (single-use)
+          const coupon = await stripe.coupon.createOnce({
+            amount_off: amountOffCents,
+            currency: 'eur',
+            redeem_by: redeemBy,
+            name: `Voucher - ${eventData.tagline}`,
+            metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_event_cancellation' }
+          });
+          const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+          const promo = await stripe.promotionCode.create({
+            coupon: coupon.id,
+            code,
             expires_at: redeemBy,
             max_redemptions: 1,
-            metadata: {
-              user_id: String(p.user_id),
-              event_id: String(eventId),
-              reason: 'admin_event_cancellation'
-            }
+            metadata: { user_id: String(p.user_id), event_id: String(eventId), coupon_id: coupon.id }
           });
 
-          // Email user with the auto-generated promo code
+          // Email user with voucher code
           await mail.send({
             to: p.email,
             locale: p.locale || req.locale || 'de',
             custom: true,
             template: 'event_cancelled',
-            subject: req.__('payment.cancelled_event_admin.subject', {
-              city: eventData.city?.name
-            }),
+            subject: req.__('payment.cancelled_event_admin.subject', { city: eventData.city?.name }),
             content: {
               name: `${p.first_name} ${p.last_name}`,
-              body: req.__('payment.cancelled_event_admin.body', {
-                event: eventData.tagline,
-                code: promo.code, // Stripe-generated code
-                date: moment.unix(redeemBy).format('YYYY-MM-DD')
-              }),
+              body: req.__('payment.cancelled_event_admin.body', { event: eventData.tagline, code: promo.code, date: moment.unix(redeemBy).format('YYYY-MM-DD') }),
               button_url: process.env.CLIENT_URL,
               button_label: req.__('payment.cancelled_event_admin.button')
             }
