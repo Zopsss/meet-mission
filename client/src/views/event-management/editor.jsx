@@ -167,8 +167,8 @@ export function EventEditor(props){
                   value: bar._id
                 }
               }),
-              default: dt._id?._id,
-              value: dt._id?._id
+              default: dt._id,
+              value: dt._id
             },
             available_spots: {
               type: 'number',

@@ -67,7 +67,8 @@ exports.getByEventId = async function ({ event_id }) {
   let data = await Transaction
     .find({ event_id })
     .populate('user_id', 'first_name last_name id date_of_birth name')
-    .populate('invited_user_id', 'first_name last_name id date_of_birth name');;
+    .populate('invited_user_id', 'first_name last_name id date_of_birth name')
+    .sort({ createdAt: -1 });
 
   return data;
 };

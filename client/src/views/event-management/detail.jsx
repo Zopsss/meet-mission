@@ -142,11 +142,11 @@ export function EventDetail(props){
                 required: true,
                 options: [
                   {
-                    label: dt._id?.name, value: dt._id?.name
+                    label: dt.name, value: dt.name
                   }
                 ],
-                default: dt._id?.name,
-                value: dt._id?.name
+                default: dt.name,
+                value: dt.name
               },
               available_spot: {
                 type: 'number',
