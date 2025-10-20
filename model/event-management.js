@@ -449,6 +449,7 @@ exports.getEventCron = async function ({day, generated}) {
           $push: {
             _id: '$bars._id',
             available_spots: '$bars.available_spots',
+            name: '$bar_info.name'
           }
         }
       }
@@ -657,6 +658,81 @@ exports.getEndEventCron = async function ({ generated }) {
       }
     },
     { $sort: { date: -1 } }
+  ];
+
+  const results = await mongoose.model('EventManagement').aggregate(pipeline);
+  return results;
+};
+
+exports.getEventNeedAttention = async function () {
+  // today start in Europe/Berlin
+  const today = moment().tz('Europe/Berlin').startOf('day').toDate();
+
+  const matchStage = {
+    date: { $gte: today }, // ✅ only upcoming / active events
+    has_grouped_by_ai: true, // ✅ only AI-grouped
+    $and: [
+      {
+        $or: [
+          { is_draft: false },
+          { is_draft: { $exists: false } },
+          { is_draft: null }
+        ]
+      },
+      {
+        $or: [
+          { is_canceled: false },
+          { is_canceled: { $exists: false } },
+          { is_canceled: null }
+        ]
+      }
+    ]
+  };
+
+  const pipeline = [
+    { $match: matchStage },
+    // Lookup city
+    {
+      $lookup: {
+        from: 'city',
+        localField: 'city',
+        foreignField: '_id',
+        as: 'city'
+      }
+    },
+    { $unwind: { path: '$city', preserveNullAndEmptyArrays: true } },
+
+    // Lookup bars
+    { $unwind: { path: '$bars', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'location',
+        localField: 'bars._id',
+        foreignField: '_id',
+        as: 'bar_info'
+      }
+    },
+    { $unwind: { path: '$bar_info', preserveNullAndEmptyArrays: true } },
+
+    // Group bars back together
+    {
+      $group: {
+        _id: '$_id',
+        date: { $first: '$date' },
+        city: { $first: '$city' },
+        start_time: { $first: '$start_time' },
+        end_time: { $first: '$end_time' },
+        tagline: { $first: '$tagline' },
+        bars: {
+          $push: {
+            _id: '$bars._id',
+            available_spots: '$bars.available_spots',
+            name: '$bar_info.name'
+          }
+        }
+      }
+    },
+    { $sort: { date: 1 } } // upcoming first
   ];
 
   const results = await mongoose.model('EventManagement').aggregate(pipeline);

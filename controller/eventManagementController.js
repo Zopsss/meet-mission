@@ -9,6 +9,10 @@ const s3 = require('../helper/s3');
 const path = require('path');
 const mail = require('../helper/mail');
 const registeredParticipant = require('../model/registered-participant');
+const stripe = require('../model/stripe');
+const moment = require('moment-timezone');
+const {checkBarCapacities} = require('../helper/teamHelper');
+const { log } = require('console');
 
 /*
  * event.get()
@@ -32,6 +36,63 @@ exports.get = async function (req, res) {
     return res.status(500).send({ error: err.message });
   }
 };
+
+/*
+ * event.getLocationNeedAttention()
+ */
+exports.getLocationNeedAttention = async function (req, res) {
+  try {
+    const events = await event.getEventNeedAttention();
+    const results = {};
+
+    for (const ev of events) {
+      // groupsAndRounds should be your grouped structure from DB
+      const groupsAndRounds = await group.getEventGroupStats(ev._id);
+      const bars = ev.bars;
+      if(groupsAndRounds?.barRoundUsage){
+        for (const [barId, rounds] of Object.entries(groupsAndRounds?.barRoundUsage)) {
+          const bar = bars.find(b => String(b._id) === String(barId));
+          if (!bar) continue;
+          let seats = 0;
+          for (const [round, data] of Object.entries(rounds)) {
+            const { total } = data;
+            total > seats && (seats = total);
+          }
+          if(seats > bar.available_spots){
+            if(results[ev._id] === undefined){
+              results[ev._id] = {
+                name: ev.city.name,
+                date: ev.date,
+                tagline: ev.tagline,
+                bars: [
+                  {
+                    bar_id: barId,
+                    available_spots: bar.available_spots,
+                    total_needed: seats - bar.available_spots,
+                    bar_name: bar.name,
+                  }
+                ]
+              }
+            } else {
+              results[ev._id].bars.push({
+                bar_id: barId,
+                available_spots: bar.available_spots,
+                total_needed: seats - bar.available_spots,
+                bar_name: bar.name,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    return res.status(200).send({ data: results });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).send({ error: err.message });
+  }
+};
+
 
 /*
  * event.create()
@@ -239,8 +300,6 @@ exports.cancel = async function (req, res) {
         isValid: true
       });
 
-      const stripe = require('../model/stripe');
-      const moment = require('moment-timezone');
       const redeemBy = Math.floor(moment().add(24, 'months').valueOf() / 1000);
 
       for (const p of participants) {
@@ -271,7 +330,7 @@ exports.cancel = async function (req, res) {
             amount_off: amountOffCents,
             currency: 'eur',
             redeem_by: redeemBy,
-            name: `Voucher - ${eventData.tagline}`,
+            name: `Voucher - ${eventData.tagline}`.substring(0, 40),
             metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_event_cancellation' }
           });
           const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;

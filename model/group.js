@@ -5,7 +5,7 @@ const GroupSchema = new Schema({
   event_id: { type: Schema.Types.ObjectId, ref: 'EventManagement', required: true },
   slot: { type: Number, required: true },
   group_name: { type: String, required: true },
-  age_group: { type: String, enum: ['18-30', '31-40', '41+'], required: true },
+  age_group: { type: String, enum: ['20-30', '31-40', '41-50', '51+'], required: true },
   bar_id: { type: Schema.Types.ObjectId, ref: 'Location', required: true },
   team_ids: [{ type: Schema.Types.ObjectId, ref: 'Team', required: true }],
   status: { type: String, default: 'Active'},
@@ -140,3 +140,118 @@ exports.getByTeamId = async function ({ id }) {
 
   return data;
 };
+
+exports.getEventGroupStats = async function (eventId) {
+  const result = await Group.aggregate([
+    { $match: { event_id: new mongoose.Types.ObjectId(eventId) } },
+    {
+      $lookup: {
+        from: 'teams',
+        localField: 'team_ids',
+        foreignField: '_id',
+        as: 'teams'
+      }
+    },
+    {
+      $lookup: {
+        from: 'location',
+        localField: 'bar_id',
+        foreignField: '_id',
+        as: 'bar_info'
+      }
+    },
+    { $unwind: '$bar_info' },
+    {
+      $addFields: {
+        members: {
+          $sum: {
+            $map: {
+              input: '$teams',
+              as: 't',
+              in: { $size: '$$t.members' }
+            }
+          }
+        }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          slot: '$slot',
+          bar_id: '$bar_id',
+          bar_name: '$bar_info.name',
+          available: '$bar_info.available_spots',
+          age_group: '$age_group'
+        },
+        totalMembers: { $sum: '$members' }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          slot: '$_id.slot',
+          bar_id: '$_id.bar_id',
+          bar_name: '$_id.bar_name',
+          available: '$_id.available'
+        },
+        total: { $sum: '$totalMembers' },
+        breakdown: {
+          $push: { age_group: '$_id.age_group', members: '$totalMembers' }
+        }
+      }
+    },
+    {
+      $project: {
+        slot: '$_id.slot',
+        bar_id: '$_id.bar_id',
+        bar_name: '$_id.bar_name',
+        available: '$_id.available',
+        total: 1,
+        breakdown: 1,
+        needed: {
+          $cond: [
+            { $gt: ['$total', '$_id.available'] },
+            { $subtract: ['$total', '$_id.available'] },
+            0
+          ]
+        },
+        overflow: { $gt: ['$total', '$_id.available'] }
+      }
+    },
+    { $sort: { slot: 1, bar_name: 1 } }
+  ]);
+
+  // Now restructure into deficits-per-slot
+  const barRoundUsage = {};
+  const deficits = {};
+
+  for (const g of result) {
+    const barId = String(g.bar_id);
+    if (!barRoundUsage[barId]) barRoundUsage[barId] = {};
+    barRoundUsage[barId][g.slot] = {
+      total: g.total,
+      breakdown: g.breakdown.reduce((acc, b) => {
+        acc[b.age_group] = (acc[b.age_group] || 0) + b.members;
+        return acc;
+      }, {})
+    };
+
+    if (g.needed > 0) {
+      if (!deficits[barId]) deficits[barId] = [];
+      deficits[barId].push({
+        slot: g.slot,
+        needed: g.needed,
+        total: g.total,
+        available: g.available,
+        breakdown: barRoundUsage[barId][g.slot].breakdown,
+        name: g.bar_name
+      });
+    }
+  }
+
+  return { deficits, barRoundUsage };
+
+};
+
+
+

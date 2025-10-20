@@ -180,7 +180,7 @@ exports.cancel = async function (req, res) {
         );
         if (!amountOffCents) throw new Error('No paid transaction found for this user');
 
-        const coupon = await stripe.coupon.createOnce({ amount_off: amountOffCents, currency: 'eur', redeem_by: redeemBy, name: `Voucher - ${eventData.tagline}`, metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_group_cancellation', group_id: String(id) } });
+        const coupon = await stripe.coupon.createOnce({ amount_off: amountOffCents, currency: 'eur', redeem_by: redeemBy, name: `Voucher - ${eventData.tagline}`.substring(0, 40), metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_group_cancellation', group_id: String(id) } });
         const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const promo = await stripe.promotionCode.create({ coupon: coupon.id, code, expires_at: redeemBy, max_redemptions: 1, metadata: { user_id: String(p.user_id), event_id: String(eventId), coupon_id: coupon.id, group_id: String(id) } });
 

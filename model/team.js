@@ -3,7 +3,7 @@ const { Schema } = mongoose;
 
 const TeamSchema = new Schema({
   event_id: { type: Schema.Types.ObjectId, ref: 'EventManagement', required: true },
-  age_group: { type: String, enum: ['18-30', '31-40', '41+'], required: true },
+  age_group: { type: String, enum: ['20-30', '31-40', '41-50', '51+'], required: true },
   members: [
     {
       type: Schema.Types.ObjectId,

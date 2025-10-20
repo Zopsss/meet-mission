@@ -13,52 +13,245 @@ const path = require('path');
 const groupModel = require('../model/group');
 const teamModel = require('../model/team');
 const i18n = require('i18n');
-const { formTeams, formSlotGroups } = require('../helper/grouping');
+const stripe = require('../model/stripe');
+const moment = require('moment-timezone');
+const { formTeams, summarizeSlots } = require('../helper/finalTeamBuilder');
+const {buildGroupsAndRoundsByAge, verifyGroups, dedupeBalanceReport, checkBarCapacities} = require('../helper/teamHelper');
 
 exports.generateTeamGroup = async function(){
-  const events = await eventModel.getEventCron({ day: 5, generated: false });
-  console.log(JSON.stringify(events), 'events');
+  const events = await eventModel.getEventCron({ day: 3, generated: false });
+  // console.log(JSON.stringify(events), 'events');
   
   if(events?.length){
     const handleGroupTeams = await Promise.all(events.map(async (event) => {
       const registeredParticipants = await transaction.getParticipantsCron({ event_id: new mongoose.Types.ObjectId(event._id)})
+      // console.log(JSON.stringify(registeredParticipants), 'participants');
+      // for testing
+      // const simplifiedparticipants = registeredParticipants.map((p) => {
+      //   return {
+      //     name: p.name || `${p.first_name} ${p.last_name}`.trim(),
+      //     gender: p.gender,
+      //     age: p.age,
+      //     is_solo: !p.invited_user_id // true if no invited_user_id
+      //   };
+      // })
+      // console.log(JSON.stringify(simplifiedparticipants), 'participants');
+      // console.log(JSON.stringify(event.bars), 'events.bars');
       if(registeredParticipants?.length){
-        const teams = formTeams(registeredParticipants);
-        if(teams?.length && event?.bars?.length){
-          const groups = formSlotGroups(teams, event.bars);
-          if(groups?.length){
-            const teamMap = new Map();
-    
-            // Save all teams concurrently
-            const savedTeams = await Promise.all(
-              teams.map(async (team) => {
-                const saved = await teamModel.add({ team: { ...team }, eventId: event._id });
-                teamMap.set(team.team_name, saved._id);
-                return saved;
-              })
-            );
-    
-            // Save all groups concurrently using the saved team IDs
-            await Promise.all(
-              groups.map(async (group) => {
-                const team_ids = group.teams.map(t => teamMap.get(t));
+        const { teams, notes: teamNotes } = formTeams({ participants: registeredParticipants });
+        // console.log("TEAMS:", JSON.stringify(teams));
+
+        // const simplifiedTeams = teams.map(team => ({
+        //   team_name: team.team_name,
+        //   age_group: team.age_group,
+        //   members: team.members.map(m => `${m.first_name} ${m.last_name}`)
+        // }));
+        // console.log("TEAMS:", JSON.stringify(simplifiedTeams));
+        // console.log("TEAM NOTES:", JSON.stringify(teamNotes));
+        console.log('===========================');
+        const {groupsAndRounds, notes, cancelledByRound: cancelledTeams} = buildGroupsAndRoundsByAge(teams, event.bars);
+        // console.log(JSON.stringify(groupsAndRounds), 'GROUP');
+        // const simplified = {};
+
+        // Object.entries(groupsAndRounds).forEach(([ageGroup, slots]) => {
+        //   Object.entries(slots).forEach(([slotKey, slotArray]) => {
+        //     if (!simplified[slotKey]) simplified[slotKey] = []; // init slot container
+
+        //     slotArray.forEach((slotItem) => {
+        //       slotItem.groups.forEach((group, groupIndex) => {
+        //         simplified[slotKey].push({
+        //           group_name: `Group ${slotKey}-${groupIndex + 1}`,
+        //           teams: group.map((team) => team.team_name),
+        //           age_group: ageGroup
+        //         });
+        //       });
+        //     });
+        //   });
+        // });
+
+        // console.log(JSON.stringify(simplified), 'GROUP');
+        // console.log(JSON.stringify(notes), 'GROUP note');
+        // const simplifiedCancelledTeams = Object.entries(cancelledTeams).map(([ageGroup, groupData]) => ({
+        //   age_group: ageGroup,
+        //   teams: groupData.all.map(team => ({
+        //     team_name: team.team_name,
+        //     members: team.members.map(m => `${m.first_name} ${m.last_name}`)
+        //   }))
+        // }));
+
+        // console.log(JSON.stringify(simplifiedCancelledTeams), 'cancelled teams');
+        // console.log(JSON.stringify(cancelledTeams), 'GROUP cancelledTeams');
+        const check = verifyGroups(groupsAndRounds);
+
+        // console.log("Errors:", check.errors);
+        const deficits = checkBarCapacities(groupsAndRounds, event.bars);
+
+        // console.log(JSON.stringify(deficits), 'deficits');
+        if (!teams?.length) {
+          return { message: "No teams created." };
+        }
+
+        // 2. Save all teams and keep ID mapping
+        const teamMap = new Map();
+
+        const savedTeams = await Promise.all(
+          teams.map(async (team) => {
+            const saved = await teamModel.add({ team: { ...team }, eventId: event._id });
+            teamMap.set(team.team_name, saved._id);
+            return saved;
+          })
+        );
+
+        // 3. Save all groups with round + bar info
+        for (const [ageGroup, rounds] of Object.entries(groupsAndRounds)) {
+          for (const [roundKey, bars] of Object.entries(rounds)) {
+            for (const bar of bars) {
+              const groups = bar.groups || [];
+              console.log(bar, 'barrrr');
+              
+              for (const [groupIndex, group] of groups.entries()) {
+                console.log(group, 'innnn');
+                
+                const team_ids = group.map((t) => teamMap.get(t.team_name));
+
                 await groupModel.add({
-                  group: { ...group, team_ids },
-                  eventId: event._id
+                  group: {
+                    group_name: `Round${roundKey}-Group${groupIndex + 1}`, // unique name
+                    slot: roundKey,   // or whatever "slot" means in your schema
+                    teams: group,           // snapshot of team objects
+                    team_ids,               // db ids of teams
+                    bar_id: bar.bar_id,
+                    age_group: ageGroup,
+                  },
+                  eventId: event._id,
                 });
-              })
-            );
-
-            // update event
-            await eventModel.update({ id: new mongoose.Types.ObjectId(event._id), data: {
-              has_grouped_by_ai: true
-            }})
-
-            return { message: 'All teams and groups saved successfully.' };
+              }
+            }
           }
         }
-        return
-        
+
+        // 4. Handle cancellations (send email + optionally persist)
+        if (Object.keys(cancelledTeams).length > 0) {
+          for (const [ageGroup, cancelledRounds] of Object.entries(cancelledTeams)) {
+            for (const [roundKey, teams] of Object.entries(cancelledRounds)) {
+              for (const team of teams) {
+                for (const member of team.members) {
+                  console.log(
+                    member,
+                    team.team_name,
+                    ageGroup,
+                    "cancelled team"
+                  );
+                  const redeemBy = Math.floor(moment().add(24, 'months').valueOf() / 1000);
+
+                  // Cancel registration
+                  await mongoose.model('RegisteredParticipant').updateMany(
+                    { user_id: new mongoose.Types.ObjectId(member.user_id), event_id: new mongoose.Types.ObjectId(event._id) },
+                    {
+                      $set: {
+                        status: 'canceled',
+                        is_cancelled: true,
+                        cancel_date: new Date(),
+                      },
+                    }
+                  );
+                  
+                  // Calculate amount user actually paid
+                  const txDocs = await mongoose.model('Transaction').find({
+                    user_id: new mongoose.Types.ObjectId(member.user_id),
+                    event_id: new mongoose.Types.ObjectId(event._id),
+                    status: 'paid',
+                    type: 'Register Event'
+                  }).lean();
+                  
+                  const amountOffCents = Math.round(
+                    (txDocs || []).reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount * 100 : 0), 0)
+                  );
+                  
+                  if (!amountOffCents) throw new Error('No paid transaction found for this user');
+                  
+                  // Create coupon and promotion code (single-use)
+                  const coupon = await stripe.coupon.createOnce({
+                    amount_off: amountOffCents,
+                    currency: 'eur',
+                    redeem_by: redeemBy,
+                    name: `Voucher - ${event.tagline}`.substring(0, 40),
+                    metadata: { user_id: String(member.user_id), event_id: String(event._id), reason: 'admin_event_cancellation' }
+                  });
+                  const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+                  const promo = await stripe.promotionCode.create({
+                    coupon: coupon.id,
+                    code,
+                    expires_at: redeemBy,
+                    max_redemptions: 1,
+                    metadata: { user_id: String(member.user_id), event_id: String(event._id), coupon_id: coupon.id }
+                  });
+                  
+                  // Email user with voucher code
+                  await mail.send({
+                    to: member.email,
+                    locale: 'de',
+                    custom: true,
+                    template: 'event_cancelled',
+                    subject: i18n.__('payment.cancelled_event_admin.subject', { city: event.city?.name }),
+                    content: {
+                      name: `${member.first_name} ${member.last_name}`,
+                      body: i18n.__('payment.cancelled_event_admin.body', { event: event.tagline, code: promo.code, date: moment.unix(redeemBy).format('YYYY-MM-DD') }),
+                      button_url: process.env.CLIENT_URL,
+                      button_label: i18n.__('payment.cancelled_event_admin.button'),
+                      closing: i18n.__('payment.cancelled_event_admin.closing')
+                    }
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        if (deficits?.deficits && Object.keys(deficits?.deficits).length > 0) {
+          let message = "Hello admin,\n\n\n\n⚠️ Bar capacity deficits detected:\n\n";
+          for (const [barId, info] of Object.entries(deficits?.deficits)) {
+            message += `Bar ${info.name} exceeded capacity in Round ${info.peakRound}\n`;
+            message += `- Assigned: ${info.peakAssigned}\n`;
+            message += `- Available: ${info.available}\n`;
+            message += `- Extra Seats Needed: ${info.needed}\n`;
+            message += `- Breakdown: ${JSON.stringify(info.breakdown)}\n\n`;
+          }
+
+          const adminAccounts = await mongoose.model("Account").find({
+            name: "Master",
+            active: true
+          }).select('id').lean();
+
+          const adminUserIds = adminAccounts.map(account => account.id);
+          const adminUsers = await mongoose.model("User").find({
+            default_account: { $in: adminUserIds }
+          }).select('email name').lean();
+          for (const adminUser of adminUsers) {
+            await mail.send({
+              
+              to: adminUser.email,
+              locale: 'en',
+              template: 'template',
+              subject: `${event.city.name} - ${event.tagline} locations need attention!`,
+              content: { 
+                body: message,
+                closing: 'Best Regards,',
+                button: {
+                  url: process.env.MISSION_CONTROL_CLIENT,
+                  label: 'Admin App'
+                }
+              }
+            })
+          }
+        }
+
+        // update event
+        await eventModel.update({ id: new mongoose.Types.ObjectId(event._id), data: {
+          has_grouped_by_ai: true
+        }})
+
+        return { message: 'All teams and groups saved successfully.' };
       }
     }))
   }

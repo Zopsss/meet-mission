@@ -11,6 +11,8 @@ export function EventGroups(props){
   const viewContext = useContext(ViewContext); 
   const router = useNavigate();
 
+  const eventsNeedAttention = useAPI(`/api/event-management/need-attention`);
+  
   // state 
   const [search, setSearch] = useState('');
   const [reload, setReload] = useState(0);
@@ -83,6 +85,66 @@ export function EventGroups(props){
         </Card>
       )}
 
+      {eventsNeedAttention?.data &&
+      Object.values(eventsNeedAttention.data).some(
+        (event) => event.bars.some((bar) => Math.abs(bar.total_needed) > 0)
+      ) && (
+        <Card className="mb-4 border-orange-300 bg-orange-50">
+          <div className="flex items-start">
+            <div className="text-orange-600 text-2xl mr-3 mt-1">⚠️</div>
+            <div className="flex-1">
+              <h3 className="text-orange-800 font-semibold mb-2 text-lg">
+                Seats Warnings
+              </h3>
+              <p className="text-orange-700 text-sm mb-4">
+                {
+                  Object.values(eventsNeedAttention.data).filter((event) =>
+                    event.bars.some((bar) => Math.abs(bar.total_needed) > 0)
+                  ).length
+                }{" "}
+                event(s) have bars that need more seats:
+              </p>
+
+              <div className="space-y-3">
+                {Object.values(eventsNeedAttention.data).map((event) => {
+                  const problematicBars = event.bars.filter(
+                    (bar) => Math.abs(bar.total_needed) > 0
+                  );
+                  if (problematicBars.length === 0) return null;
+
+                  return (
+                    <div
+                      key={event.name}
+                      className="rounded-lg border border-orange-200 bg-white shadow-sm p-3"
+                    >
+                      <h4 className="text-orange-800 font-medium">
+                        {event.name}{" "}
+                        <span className="text-xs text-gray-500 ml-2">
+                          {new Date(event.date).toLocaleDateString()}
+                        </span>
+                      </h4>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {problematicBars.map((bar) => (
+                          <span
+                            key={bar.bar_id}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300"
+                          >
+                            {bar.bar_name} •{" "}
+                            {bar.total_needed < 0
+                              ? `${Math.abs(bar.total_needed)} more seats needed`
+                              : `${bar.total_needed} over capacity`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="w-full flex justify-end mb-8">
@@ -141,7 +203,6 @@ export function EventGroups(props){
 function FetchEvents(props){
 
   const events = useAPI(`/api/event-management?search=${props.search}&group=name`, 'GET', props.reload);
-
  
   useEffect(() => {
     const setData = (events, props) => {
@@ -163,9 +224,7 @@ function FetchEvents(props){
             capacityStatus = '⚠️ 90%+ Full';
           }
 
-          console.log(dt);
-
-                        return {
+          return {
                 ...dt,
                 city: dt.city.name,
                 num_bars: dt.bars?.length,

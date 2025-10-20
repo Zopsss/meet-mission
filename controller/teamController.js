@@ -160,7 +160,7 @@ exports.cancel = async function (req, res) {
           (txDocs || []).reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount * 100 : 0), 0)
         );
         if (!amountOffCents) throw new Error('No paid transaction found for this user');
-        const coupon = await stripe.coupon.createOnce({ amount_off: amountOffCents, currency: 'eur', redeem_by: redeemBy, name: `Voucher - ${eventData.tagline}`, metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_team_cancellation', team_id: String(id) } });
+        const coupon = await stripe.coupon.createOnce({ amount_off: amountOffCents, currency: 'eur', redeem_by: redeemBy, name: `Voucher - ${eventData.tagline}`.substring(0, 40), metadata: { user_id: String(p.user_id), event_id: String(eventId), reason: 'admin_team_cancellation', team_id: String(id) } });
         const code = `MEET-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
         const promo = await stripe.promotionCode.create({ coupon: coupon.id, code, expires_at: redeemBy, max_redemptions: 1, metadata: { user_id: String(p.user_id), event_id: String(eventId), coupon_id: coupon.id, team_id: String(id) } });
         await mail.send({ to: p.email, locale: p.locale || req.locale || 'de', custom: true, template: 'event_cancelled', subject: req.__('payment.cancelled_event.subject_personal', { city: eventData.city?.name }), content: { name: `${p.first_name} ${p.last_name}`, body: req.__('payment.cancelled_event.body_personal', { event: eventData.tagline, code: promo.code, date: moment.unix(redeemBy).format('YYYY-MM-DD') }), button_url: process.env.CLIENT_URL, button_label: req.__('payment.cancelled_event.button') } });

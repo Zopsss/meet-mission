@@ -2,7 +2,8 @@
   "cancelled_event_admin": {
     "subject": "{{city}} – Event wurde von uns storniert",
     "body": "Das Event {{event}} wurde von unserem Team storniert.\n\nDein Gutschein-Code: {{code}}\nGültig bis: {{date}}\n\nDu kannst ihn bei deiner nächsten Buchung einlösen.",
-    "button": "Zu Meetlocal"
+    "button": "Zu Meetlocal",
+    "closing": "Viele Grüße,"
   }
 }
 

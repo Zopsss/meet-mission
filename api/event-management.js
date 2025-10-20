@@ -6,6 +6,8 @@ const use = require('../helper/utility').use;
 
 api.get('/api/event-management', auth.verify('master'), use(eventManagementController.get));
 
+api.get('/api/event-management/need-attention', auth.verify('master'), use(eventManagementController.getLocationNeedAttention));
+
 api.get('/api/event-management/locations/:id', auth.verify('master'), use(eventManagementController.getLocations));
 
 api.get('/api/event-management/:id', auth.verify('master'), use(eventManagementController.getById));

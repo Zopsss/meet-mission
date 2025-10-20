@@ -19,6 +19,15 @@ const RegisteredParticipantSchema = new Schema({
   is_main_user: { type: Boolean, default: null },
   is_cancelled: { type: Boolean, default: null },
   cancel_date: { type: Date },
+  looking_for: { type: String },
+  relationship_goal: { type: String, default: null },
+  children: { type: Boolean, default: null },
+  kind_of_person: { type: String, default: null },
+  feel_around_new_people: { type: String, default: null },
+  prefer_spending_time: { type: String, default: null },
+  describe_you_better: { type: String, default: null },
+  describe_role_in_relationship: { type: String, default: null },
+  is_test: { type: Boolean, default: null },
 }, { versionKey: false, timestamps: true });
 
 // Model
