@@ -119,74 +119,41 @@ function formTeams(input) {
       .filter((p) => p.gender === "female")
       .sort((a, b) => a.age - b.age);
 
-    const usedMales = new Set();
-    const usedFemales = new Set();
+    const numberOfPairs = Math.min(males.length, females.length);
 
-    // Opposite gender pairing with minimum age gap
-    for (const male of males) {
-      if (usedMales.has(male)) continue;
+    for (let i = 0; i < numberOfPairs; i++) {
+      const male = males[i];
+      const female = females[i];
 
-      let closestFemale = null;
-      let minDiff = Infinity;
+      createTeam([male, female], age_group);
 
-      for (const female of females) {
-        if (usedFemales.has(female)) continue;
-
-        const diff = Math.abs(male.age - female.age);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestFemale = female;
-        }
-      }
-
-      if (closestFemale) {
-        createTeam([male, closestFemale], age_group);
-        usedMales.add(male);
-        usedFemales.add(closestFemale);
-        used.add(getId(male));
-        used.add(getId(closestFemale));
-      }
+      // We only need to update the main 'used' set
+      used.add(getId(male));
+      used.add(getId(female));
     }
 
     // Handle leftovers and pair same gender by closest age
-    const maleLeftovers = males.filter((m) => !usedMales.has(m));
-    const femaleLeftovers = females.filter((f) => !usedFemales.has(f));
+    const maleLeftovers = males.filter((m) => !used.has(getId(m)));
+    const femaleLeftovers = females.filter((f) => !used.has(getId(f)));
 
-    // We will have only one type of leftovers at this point
-    const leftovers =
-      maleLeftovers.length > 0 ? maleLeftovers : femaleLeftovers;
+    const leftovers = maleLeftovers.length > 0 ? maleLeftovers : femaleLeftovers;
 
-    // Pair same-gender participants by minimum age difference
-    const usedLeftovers = new Set();
-
-    for (let i = 0; i < leftovers.length; i++) {
-      if (usedLeftovers.has(leftovers[i])) continue;
-
-      let closest = null;
-      let minDiff = Infinity;
-
-      for (let j = i + 1; j < leftovers.length; j++) {
-        if (usedLeftovers.has(leftovers[j])) continue;
-
-        const diff = Math.abs(leftovers[i].age - leftovers[j].age);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = leftovers[j];
-        }
-      }
-
-      if (closest) {
-        createTeam([leftovers[i], closest], age_group);
-        usedLeftovers.add(leftovers[i]);
-        usedLeftovers.add(closest);
-        used.add(getId(leftovers[i]));
-        used.add(getId(closest));
-      }
+    for (let i = 0; i < leftovers.length - 1; i += 2) {
+      const personA = leftovers[i];
+      const personB = leftovers[i + 1];
+      createTeam([personA, personB], age_group);
+      used.add(getId(personA));
+      used.add(getId(personB));
     }
 
-    if (leftovers.length % 2 !== 0) {
-      const unpaired = leftovers[leftovers.length - 1];
+    let finalLeftOver = null;
+    if (maleLeftovers.length % 2 !== 0) {
+        finalLeftOver = maleLeftovers[maleLeftovers.length - 1];
+    } else if (femaleLeftovers.length % 2 !== 0) {
+        finalLeftOver = femaleLeftovers[femaleLeftovers.length - 1];
+    }
 
+    if (finalLeftOver) {
       // find teams in this age_group that can accept a 3rd member
       const eligibleTeams = teams.filter(
         (t) =>
@@ -196,7 +163,7 @@ function formTeams(input) {
           // make sure it's a 2-person team
           t.members.length === 2 &&
           // ensure it's not already all same gender as the leftover
-          !t.members.every((m) => m.gender === unpaired.gender)
+          !t.members.every((m) => m.gender === finalLeftOver.gender)
       );
 
       if (eligibleTeams.length > 0) {
@@ -208,7 +175,7 @@ function formTeams(input) {
           const avgAge =
             team.members.reduce((sum, m) => sum + m.age, 0) /
             team.members.length;
-          const diff = Math.abs(avgAge - unpaired.age);
+          const diff = Math.abs(avgAge - finalLeftOver.age);
 
           if (diff < smallestDiff) {
             smallestDiff = diff;
@@ -218,13 +185,13 @@ function formTeams(input) {
 
         // add unpaired to the closest eligible team
         if (closestTeam) {
-          closestTeam.members.push(memberShape(unpaired));
-          used.add(getId(unpaired));
+          closestTeam.members.push(memberShape(finalLeftOver));
+          used.add(getId(finalLeftOver));
         }
       } else {
         // if no suitable team found, optionally just skip or note it
         notes.push(
-          `Unpaired ${unpaired.first_name} ${unpaired.last_name} (${unpaired.gender}, ${unpaired.age}) in ${age_group} had no suitable 3-person team.`
+          `Unpaired ${finalLeftOver.first_name} ${finalLeftOver.last_name} (${finalLeftOver.gender}, ${finalLeftOver.age}) in ${age_group} had no suitable 3-person team.`
         );
       }
     }

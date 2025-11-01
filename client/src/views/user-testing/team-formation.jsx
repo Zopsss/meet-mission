@@ -41,20 +41,16 @@ export function TeamFormation() {
       const data = res.data;
       console.log("data: ", data);
 
-      // Sort participants by age group (ascending)
+      // Sort participants by age (ascending)
       const sortedParticipants = [...data.generaredParticipants].sort(
-        (a, b) => {
-          const gA = getAgeGroupOrder(getAgeGroup(a.age));
-          const gB = getAgeGroupOrder(getAgeGroup(b.age));
-          return gA - gB;
-        }
-      );
+        (a, b) => a.age - b.age
+      )
 
-      // Sort teams by age group (ascending)
+      // Sort teams by the age of their first member (ascending)
       const sortedTeams = [...data.teams].sort((a, b) => {
-        const gA = getAgeGroupOrder(a.age_group);
-        const gB = getAgeGroupOrder(b.age_group);
-        return gA - gB;
+        const ageA = a.members?.[0]?.age ?? Infinity;
+        const ageB = b.members?.[0]?.age ?? Infinity;
+        return ageA - ageB;
       });
 
       const sortedData = {
@@ -214,17 +210,17 @@ export function TeamFormation() {
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
                               {m1
-                                ? `${m1.first_name} (${m1.gender}, ${m1.age})`
+                                ? `${m1.first_name} ${m1.last_name} (${m1.gender}, ${m1.age})`
                                 : "-"}
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
                               {m2
-                                ? `${m2.first_name} (${m2.gender}, ${m2.age})`
+                                ? `${m2.first_name} ${m2.last_name} (${m2.gender}, ${m2.age})`
                                 : "-"}
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
                               {m3
-                                ? `${m3.first_name} (${m3.gender}, ${m3.age})`
+                                ? `${m3.first_name} ${m3.last_name} (${m3.gender}, ${m3.age})`
                                 : "-"}
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
