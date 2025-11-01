@@ -52,6 +52,8 @@ function memberShape(p) {
 }
 
 function formTeams(input) {
+  console.log("-----------------------------------");
+  console.log("forming team...");
   const participants = input.participants || [];
   const notes = [];
   const teams = [];
@@ -60,13 +62,16 @@ function formTeams(input) {
   // Buckets by age_group
   const byAge = new Map();
   AGE_GROUPS.forEach((g) => byAge.set(g.label, []));
+  console.log("byAge: ", byAge);
+  console.log("participants: ", participants);
 
-  function createTeam(members, age_group) {
+  function createTeam(members, age_group, already_registered_together = false) {
     teams.push({
       team_id: uuidv4.v4(),
       team_name: `Team ${teams.length + 1}`,
       age_group,
       members: members.map(memberShape),
+      already_registered_together,
     });
   }
 
@@ -77,7 +82,9 @@ function formTeams(input) {
 
     const group = getAgeGroup(main.age);
     if (!group) {
-      notes.push(`Excluded ${main.first_name} (${main.age}) — outside supported groups.`);
+      notes.push(
+        `Excluded ${main.first_name} (${main.age}) — outside supported groups.`
+      );
       continue;
     }
 
@@ -92,7 +99,7 @@ function formTeams(input) {
 
     if (partner && getAgeGroup(partner.age) === group) {
       // lock duo
-      createTeam([main, partner], group);
+      createTeam([main, partner], group, true);
       used.add(mainId);
       used.add(getId(partner));
     } else {
@@ -100,38 +107,131 @@ function formTeams(input) {
     }
   }
 
-  // Step 2: pair remaining singles in each age_group
+  // Step 2: form teams with minimum age gap
   for (const [age_group, people] of byAge) {
     const pool = people.filter((p) => !used.has(getId(p)));
 
-    while (pool.length >= 2) {
-      const a = pool.shift();
-      const b = pool.shift();
-      createTeam([a, b], age_group);
-      used.add(getId(a));
-      used.add(getId(b));
+    // Separate males and females
+    const males = pool
+      .filter((p) => p.gender === "male")
+      .sort((a, b) => a.age - b.age);
+    const females = pool
+      .filter((p) => p.gender === "female")
+      .sort((a, b) => a.age - b.age);
+
+    const usedMales = new Set();
+    const usedFemales = new Set();
+
+    // Opposite gender pairing with minimum age gap
+    for (const male of males) {
+      if (usedMales.has(male)) continue;
+
+      let closestFemale = null;
+      let minDiff = Infinity;
+
+      for (const female of females) {
+        if (usedFemales.has(female)) continue;
+
+        const diff = Math.abs(male.age - female.age);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestFemale = female;
+        }
+      }
+
+      if (closestFemale) {
+        createTeam([male, closestFemale], age_group);
+        usedMales.add(male);
+        usedFemales.add(closestFemale);
+        used.add(getId(male));
+        used.add(getId(closestFemale));
+      }
     }
 
-    // Step 3: handle leftover single
-    if (pool.length === 1) {
-      const leftover = pool.shift();
-      const candidate = teams.find(
-        (t) => t.age_group === age_group && t.members.length === 2
+    // Handle leftovers and pair same gender by closest age
+    const maleLeftovers = males.filter((m) => !usedMales.has(m));
+    const femaleLeftovers = females.filter((f) => !usedFemales.has(f));
+
+    // We will have only one type of leftovers at this point
+    const leftovers =
+      maleLeftovers.length > 0 ? maleLeftovers : femaleLeftovers;
+
+    // Pair same-gender participants by minimum age difference
+    const usedLeftovers = new Set();
+
+    for (let i = 0; i < leftovers.length; i++) {
+      if (usedLeftovers.has(leftovers[i])) continue;
+
+      let closest = null;
+      let minDiff = Infinity;
+
+      for (let j = i + 1; j < leftovers.length; j++) {
+        if (usedLeftovers.has(leftovers[j])) continue;
+
+        const diff = Math.abs(leftovers[i].age - leftovers[j].age);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = leftovers[j];
+        }
+      }
+
+      if (closest) {
+        createTeam([leftovers[i], closest], age_group);
+        usedLeftovers.add(leftovers[i]);
+        usedLeftovers.add(closest);
+        used.add(getId(leftovers[i]));
+        used.add(getId(closest));
+      }
+    }
+
+    if (leftovers.length % 2 !== 0) {
+      const unpaired = leftovers[leftovers.length - 1];
+
+      // find teams in this age_group that can accept a 3rd member
+      const eligibleTeams = teams.filter(
+        (t) =>
+          // ensure that the team was not pre-registered together
+          !t.already_registered_together &&
+          t.age_group === age_group &&
+          // make sure it's a 2-person team
+          t.members.length === 2 &&
+          // ensure it's not already all same gender as the leftover
+          !t.members.every((m) => m.gender === unpaired.gender)
       );
-      if (candidate) {
-        candidate.members.push(memberShape(leftover));
-        used.add(getId(leftover));
+
+      if (eligibleTeams.length > 0) {
+        // find team whose avg age is closest to unpaired's age
+        let closestTeam = null;
+        let smallestDiff = Infinity;
+
+        for (const team of eligibleTeams) {
+          const avgAge =
+            team.members.reduce((sum, m) => sum + m.age, 0) /
+            team.members.length;
+          const diff = Math.abs(avgAge - unpaired.age);
+
+          if (diff < smallestDiff) {
+            smallestDiff = diff;
+            closestTeam = team;
+          }
+        }
+
+        // add unpaired to the closest eligible team
+        if (closestTeam) {
+          closestTeam.members.push(memberShape(unpaired));
+          used.add(getId(unpaired));
+        }
       } else {
-        createTeam([leftover], age_group);
-        notes.push(`Solo team created for ${leftover.first_name} in ${age_group}.`);
-        used.add(getId(leftover));
+        // if no suitable team found, optionally just skip or note it
+        notes.push(
+          `Unpaired ${unpaired.first_name} ${unpaired.last_name} (${unpaired.gender}, ${unpaired.age}) in ${age_group} had no suitable 3-person team.`
+        );
       }
     }
   }
 
   return { teams, notes };
 }
-
 
 // ---- Helpers ----
 function uid(prefix = "id") {
@@ -171,7 +271,7 @@ function makeEncounterTracker() {
 // Assign groups to bars with capacity check
 function assignGroupsToBars(groups, bars, slot, ageGroup, notes) {
   console.log(groups[0], bars[0], slot, ageGroup, 'assignGroupsToBars');
-  
+
   return groups.map((g, i) => {
     const bar = bars[i % bars.length];
     const neededSeats = g.reduce((acc, t) => acc + t.members.length, 0);

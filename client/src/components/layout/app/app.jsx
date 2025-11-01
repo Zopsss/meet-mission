@@ -35,7 +35,8 @@ export function AppLayout(props){
           { label: 'Events', icon: 'clock', link: '/events' },
           { label: 'Accounts', icon: 'credit-card', link: '/accounts' },
           { label: 'Users', icon: 'users', link: '/users' },
-          { label: 'Sign Out', icon: 'log-out', action: context.signout }
+          { label: 'Sign Out', icon: 'log-out', action: context.signout },
+          { label: "Test Team Formation", icon: "clipboard", link: "/test-team-formation" }
         ]}
       />
 

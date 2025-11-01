@@ -26,6 +26,7 @@ import { TeamsDetail } from 'views/event-teams/detail';
 import { TeamsLists } from 'views/event-teams/lists';
 import { TeamsEditor } from 'views/event-teams/editor';
 import { ParticipantMessages } from 'views/participant-messages/groups';
+import { TeamFormation } from 'views/user-testing/team-formation';
 
 const Routes = [
   {
@@ -270,6 +271,12 @@ const Routes = [
     layout: 'app',
     permission: 'master',
     title: 'Event Detail'
+  },
+  {
+    path: '/test-team-formation',
+    view: TeamFormation,
+    layout: 'app',
+    title: 'Test Team Formation'
   },
 ]
 
