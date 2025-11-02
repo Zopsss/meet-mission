@@ -15,4 +15,5 @@ module.exports = [
     require('./registered-participant'),
     require('./team'),
     require('./group'),
+    require('./test'),
 ];
