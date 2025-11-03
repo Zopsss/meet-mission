@@ -674,134 +674,140 @@ function assignGroupsToSharedBars(groups, bars, notes, round, age_group) {
   return { success: true, assigned, unassignedTeams };
 }
 
+/**
+ * This function is not used anywhere, other file(s) have function with same name.
+ * Commeting it to avoid confusion.
+ *
+ * @param {*} input
+ * @returns
+ */
+// function buildGroupsAndRoundsByAge(allTeams, allBars = []) {
+//   const groupsAndRounds = [];
+//   const notes = [];
+//   const cancelledTeams = []; // ✅ collect canceled teams here
 
-function buildGroupsAndRoundsByAge(allTeams, allBars = []) {
-  const groupsAndRounds = [];
-  const notes = [];
-  const cancelledTeams = []; // ✅ collect canceled teams here
+//   // 1) group teams by age_group
+//   const byAge = new Map();
+//   for (const t of allTeams) {
+//     if (!byAge.has(t.age_group)) byAge.set(t.age_group, []);
+//     byAge.get(t.age_group).push(t);
+//   }
 
-  // 1) group teams by age_group
-  const byAge = new Map();
-  for (const t of allTeams) {
-    if (!byAge.has(t.age_group)) byAge.set(t.age_group, []);
-    byAge.get(t.age_group).push(t);
-  }
+//   // 2) per age group
+//   for (const [age_group, teams] of byAge.entries()) {
+//     const teamCount = teams.length;
+//     if (teamCount < 6) {
+//       notes.push(`❌ Event canceled for ${age_group} (<6 teams / <12 participants).`);
+//       cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Too few teams" })));
+//       continue;
+//     }
 
-  // 2) per age group
-  for (const [age_group, teams] of byAge.entries()) {
-    const teamCount = teams.length;
-    if (teamCount < 6) {
-      notes.push(`❌ Event canceled for ${age_group} (<6 teams / <12 participants).`);
-      cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Too few teams" })));
-      continue;
-    }
+//     const global = genderCountsForTeams(teams);
+//     if (global.total > 0) {
+//       const maleRatio = global.males / global.total;
+//       const femaleRatio = global.females / global.total;
+//       if (maleRatio > 0.6 || femaleRatio > 0.6) {
+//         notes.push(`❌ Cannot satisfy 60/40 globally for ${age_group} (male:${global.males}, female:${global.females}). Canceling age group.`);
+//         cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Global gender imbalance" })));
+//         continue;
+//       }
+//     }
 
-    const global = genderCountsForTeams(teams);
-    if (global.total > 0) {
-      const maleRatio = global.males / global.total;
-      const femaleRatio = global.females / global.total;
-      if (maleRatio > 0.6 || femaleRatio > 0.6) {
-        notes.push(`❌ Cannot satisfy 60/40 globally for ${age_group} (male:${global.males}, female:${global.females}). Canceling age group.`);
-        cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Global gender imbalance" })));
-        continue;
-      }
-    }
+//     let mode, rounds, desiredGroupCount;
+//     if (teamCount >= 12) { mode = "A"; rounds = 3; desiredGroupCount = Math.max(4, Math.floor(teamCount / 3)); }
+//     else if (teamCount >= 9) { mode = "B"; rounds = 2; desiredGroupCount = 3; }
+//     else { mode = "C"; rounds = 2; desiredGroupCount = 2; }
 
-    let mode, rounds, desiredGroupCount;
-    if (teamCount >= 12) { mode = "A"; rounds = 3; desiredGroupCount = Math.max(4, Math.floor(teamCount / 3)); }
-    else if (teamCount >= 9) { mode = "B"; rounds = 2; desiredGroupCount = 3; }
-    else { mode = "C"; rounds = 2; desiredGroupCount = 2; }
+//     const tempRounds = [];
+//     const pairHistory = new Set();
+//     let canceledAgeGroup = false;
 
-    const tempRounds = [];
-    const pairHistory = new Set();
-    let canceledAgeGroup = false;
+//     for (let r = 0; r < rounds && !canceledAgeGroup; r++) {
+//       const minTeamsPerGroup = 3;
+//       const maxTeamsPerGroup = (mode === "A") ? 5 : 4;
 
-    for (let r = 0; r < rounds && !canceledAgeGroup; r++) {
-      const minTeamsPerGroup = 3;
-      const maxTeamsPerGroup = (mode === "A") ? 5 : 4;
+//       const makeResult = makeBalancedGroups(teams, desiredGroupCount, minTeamsPerGroup, maxTeamsPerGroup);
+//       if (!makeResult.success) {
+//         notes.push(`❌ Failed to form balanced groups for ${age_group}, round ${r+1}: ${makeResult.reason}.`);
+//         cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Failed balanced grouping" })));
+//         canceledAgeGroup = true;
+//         break;
+//       }
+//       let roundGroups = makeResult.groups;
 
-      const makeResult = makeBalancedGroups(teams, desiredGroupCount, minTeamsPerGroup, maxTeamsPerGroup);
-      if (!makeResult.success) {
-        notes.push(`❌ Failed to form balanced groups for ${age_group}, round ${r+1}: ${makeResult.reason}.`);
-        cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Failed balanced grouping" })));
-        canceledAgeGroup = true;
-        break;
-      }
-      let roundGroups = makeResult.groups;
+//       const dupResolved = resolveDuplicates(roundGroups, pairHistory, notes);
+//       if (!dupResolved) {
+//         notes.push(`❌ Could not resolve duplicate meetings for ${age_group}, round ${r+1}.`);
+//         // Instead of cancelling whole age group:
+//         const badGroups = roundGroups.filter(grp => !isUnique(grp, pairHistory));
+//         cancelledTeams.push(...badGroups.flat().map(t => ({
+//           ...t,
+//           reason: "Duplicate meetings",
+//           round: r+1,
+//           age_group
+//         })));
+//         canceledAgeGroup = true;
+//         break;
+//       }
 
-      const dupResolved = resolveDuplicates(roundGroups, pairHistory, notes);
-      if (!dupResolved) {
-        notes.push(`❌ Could not resolve duplicate meetings for ${age_group}, round ${r+1}.`);
-        // Instead of cancelling whole age group:
-        const badGroups = roundGroups.filter(grp => !isUnique(grp, pairHistory));
-        cancelledTeams.push(...badGroups.flat().map(t => ({
-          ...t,
-          reason: "Duplicate meetings",
-          round: r+1,
-          age_group
-        })));
-        canceledAgeGroup = true;
-        break;
-      }
+//       // gender ratio check
+//       let violated = false;
+//       for (let gi = 0; gi < roundGroups.length; gi++) {
+//         if (!genderRatioOk(roundGroups[gi])) {
+//           violated = true;
+//           notes.push(`❌ Group ${gi+1} in ${age_group} round ${r+1} violates 60/40.`);
+//         }
+//       }
+//       if (violated) {
+//         cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Gender ratio violation" })));
+//         canceledAgeGroup = true;
+//         break;
+//       }
 
-      // gender ratio check
-      let violated = false;
-      for (let gi = 0; gi < roundGroups.length; gi++) {
-        if (!genderRatioOk(roundGroups[gi])) {
-          violated = true;
-          notes.push(`❌ Group ${gi+1} in ${age_group} round ${r+1} violates 60/40.`);
-        }
-      }
-      if (violated) {
-        cancelledTeams.push(...teams.map(t => ({ ...t, reason: "Gender ratio violation" })));
-        canceledAgeGroup = true;
-        break;
-      }
+//       // ✅ bar assignment (shared capacity)
+//       const bars = initBars(allBars);
+//       const assignResult = assignGroupsToSharedBars(roundGroups, bars, notes, r+1, age_group);
 
-      // ✅ bar assignment (shared capacity)
-      const bars = initBars(allBars);
-      const assignResult = assignGroupsToSharedBars(roundGroups, bars, notes, r+1, age_group);
+//       if (assignResult.unassignedTeams.length > 0) {
+//         notes.push(`⚠️ Some teams could not be assigned to bars in ${age_group}, round ${r+1}.`);
+//         cancelledTeams.push(...assignResult.unassignedTeams); // collect only unassigned
+//       }
 
-      if (assignResult.unassignedTeams.length > 0) {
-        notes.push(`⚠️ Some teams could not be assigned to bars in ${age_group}, round ${r+1}.`);
-        cancelledTeams.push(...assignResult.unassignedTeams); // collect only unassigned
-      }
+//       const groupsOut = assignResult.assigned.map((slot, gi) => {
+//         const groupId = `${age_group}-R${r+1}-G${gi+1}`;
+//         return {
+//           group_id: groupId,
+//           bar_id: slot.bar._id,
+//           bar_name: slot.bar.name,
+//           teams: slot.group
+//         };
+//       });
 
-      const groupsOut = assignResult.assigned.map((slot, gi) => {
-        const groupId = `${age_group}-R${r+1}-G${gi+1}`;
-        return {
-          group_id: groupId,
-          bar_id: slot.bar._id,
-          bar_name: slot.bar.name,
-          teams: slot.group
-        };
-      });
+//       // update pairHistory
+//       for (const grp of roundGroups) {
+//         for (let i = 0; i < grp.length; i++) {
+//           for (let j = i + 1; j < grp.length; j++) {
+//             const key = [grp[i].team_id, grp[j].team_id].sort().join("-");
+//             pairHistory.add(key);
+//           }
+//         }
+//       }
 
-      // update pairHistory
-      for (const grp of roundGroups) {
-        for (let i = 0; i < grp.length; i++) {
-          for (let j = i + 1; j < grp.length; j++) {
-            const key = [grp[i].team_id, grp[j].team_id].sort().join("-");
-            pairHistory.add(key);
-          }
-        }
-      }
+//       tempRounds.push({
+//         age_group,
+//         mode,
+//         round: r + 1,
+//         groups: groupsOut
+//       });
+//     }
 
-      tempRounds.push({
-        age_group,
-        mode,
-        round: r + 1,
-        groups: groupsOut
-      });
-    }
+//     if (!canceledAgeGroup) {
+//       groupsAndRounds.push(...tempRounds);
+//     }
+//   }
 
-    if (!canceledAgeGroup) {
-      groupsAndRounds.push(...tempRounds);
-    }
-  }
-
-  return { groupsAndRounds, notes, cancelledTeams };
-}
+//   return { groupsAndRounds, notes, cancelledTeams };
+// }
 
 
 // function buildGroupsAndRounds(teams, bars) {
@@ -897,5 +903,5 @@ module.exports = {
     formTeams,
     summarizeSlots,
     AGE_GROUPS,
-    buildGroupsAndRoundsByAge
+    // buildGroupsAndRoundsByAge
   };
