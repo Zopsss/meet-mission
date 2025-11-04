@@ -8,12 +8,12 @@ import { useState, useEffect, useContext } from 'react';
 import { Animate, Card, Table, Search, useAPI, Form, ViewContext, useNavigate } from 'components/lib';
 
 export function EventGroups(props){
-  const viewContext = useContext(ViewContext); 
+  const viewContext = useContext(ViewContext);
   const router = useNavigate();
 
   const eventsNeedAttention = useAPI(`/api/event-management/need-attention`);
-  
-  // state 
+
+  // state
   const [search, setSearch] = useState('');
   const [reload, setReload] = useState(0);
   const [events, setEvents] = useState([]);
@@ -56,7 +56,7 @@ export function EventGroups(props){
       setReload(prev => prev + 1);
     });
   }
-  
+
   return (
     <Animate>
 
@@ -67,7 +67,7 @@ export function EventGroups(props){
         setLoading={ x => setLoading(x) }
         setData={ x => setEvents(x) }
         reload={reload}
-      /> 
+      />
 
        {/* Capacity Warning Alert */}
        {events && events.filter(event => event.capacity_warning || event.is_at_capacity).length > 0 && (
@@ -77,7 +77,7 @@ export function EventGroups(props){
             <div>
               <h3 className="text-orange-800 font-semibold">Capacity Warnings</h3>
               <p className="text-orange-700 text-sm">
-                {events.filter(event => event.capacity_warning).length} event(s) at 90%+ capacity • 
+                {events.filter(event => event.capacity_warning).length} event(s) at 90%+ capacity •
                 {events.filter(event => event.is_at_capacity).length} event(s) at full capacity
               </p>
             </div>
@@ -152,7 +152,7 @@ export function EventGroups(props){
             + Add Event
           </button>
         </div>
-        <Table  
+        <Table
           loading={ loading }
           data={ events }
           badge={{ col: 'status', condition: [
@@ -203,11 +203,11 @@ export function EventGroups(props){
 function FetchEvents(props){
 
   const events = useAPI(`/api/event-management?search=${props.search}&group=name`, 'GET', props.reload);
- 
+
   useEffect(() => {
     const setData = (events, props) => {
       props.setLoading(events.loading);
-     
+
       if (events.data){
         const formatter = new Intl.DateTimeFormat('de-DE', {
           timeZone: 'Europe/Berlin',
@@ -216,8 +216,7 @@ function FetchEvents(props){
           day: '2-digit'
         });
         props.setData(events.data.map((dt) => {
-          // Determine capacity status with emoji
-          let capacityStatus = '';
+          let capacityStatus = '✅ Available';
           if (dt.is_at_capacity) {
             capacityStatus = '🚫 Full';
           } else if (dt.capacity_warning) {
@@ -225,13 +224,11 @@ function FetchEvents(props){
           }
 
           return {
-                ...dt,
-                city: dt.city.name,
-                num_bars: dt.bars?.length,
-                date: formatter.format(new Date(dt.date)),
-                            // Capacity percentage with % symbol
-                capacity_percentage: dt.capacity_percentage ? `${dt.capacity_percentage}%` : '0%',
-            // Add capacity status with emoji
+            ...dt,
+            city: dt.city.name,
+            num_bars: dt.bars?.length,
+            date: formatter.format(new Date(dt.date)),
+            capacity_percentage: dt.capacity_percentage ? `${dt.capacity_percentage}%` : '0%',
             capacity_status: capacityStatus
           }
         }));
