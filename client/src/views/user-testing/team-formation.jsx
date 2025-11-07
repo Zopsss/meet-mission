@@ -17,7 +17,7 @@ function getAgeGroupOrder(group) {
 }
 
 export function TeamFormation() {
-  const [numParticipants, setNumParticipants] = useState("14");
+  const [numParticipants, setNumParticipants] = useState("75");
   const [apiData, setApiData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -44,7 +44,7 @@ export function TeamFormation() {
       // Sort participants by age (ascending)
       const sortedParticipants = [...data.generaredParticipants].sort(
         (a, b) => a.age - b.age
-      )
+      );
 
       // Sort teams by the age of their first member (ascending)
       const sortedTeams = [...data.teams].sort((a, b) => {
@@ -90,6 +90,7 @@ export function TeamFormation() {
               {isLoading ? "Generating..." : "Generate Teams"}
             </button>
           </div>
+          <h1 className="text-sm mb-4 mt-2 text-red-500">Note: These are just dummy data. Keep the number of participants high to get more random and accurate results.</h1>
         </div>
 
         <div>
@@ -100,15 +101,74 @@ export function TeamFormation() {
               {/* Participants Table */}
               <div className="w-full max-w-5xl mt-6">
                 {apiData.notes && apiData.notes.length > 0 && (
-                <div>
-                  <h2 className="font-semibold mb-4 text-center">
-                    Notes:
-                  </h2>
-                  <div className="space-y-3">
-                    {apiData.notes.map((note, index) => <p key={index} className="text-center">{note}</p>)}
+                  <div>
+                    <h2 className="font-semibold mb-4 text-center">Notes:</h2>
+                    <div className="space-y-3">
+                      {apiData.notes.map((note, index) => (
+                        <p key={index} className="text-center">
+                          {note}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                </div>
                 )}
+
+
+                <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
+                  Stats:
+                </h2>
+                <table className="divide-y divide-gray-200 border w-full">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Age Group
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Males
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Females
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Male Ratio
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Female Ratio
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {Object.entries(apiData.generatedData.summary).map(
+                      ([ageGroup, stats]) => (
+                        <tr key={ageGroup}>
+                          <td className="px-4 py-3 text-center text-sm font-semibold">
+                            {ageGroup}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            {stats.males}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            {stats.females}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm">
+                            {stats.total}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-blue-600 font-mono">
+                            {stats.maleRatio}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
+                            {stats.femaleRatio}
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+
                 <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
                   Generated Participants ({apiData.generaredParticipants.length}
                   )

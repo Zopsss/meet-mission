@@ -251,7 +251,10 @@ function generateTestData(totalParticipants) {
     const totalInGroup = groupCounts.males + groupCounts.females;
 
     // Enforce 60/40 ratio
-    if ((groupCounts.males + 1) / (totalInGroup + 1) > 0.6) {
+    if (totalInGroup < 10) {
+      // For the first 10 participants, allow any gender randomly
+      gender = Math.random() < 0.5 ? "male" : "female";
+    } else if ((groupCounts.males + 1) / (totalInGroup + 1) > 0.6) {
       gender = "female";
     } else if ((groupCounts.females + 1) / (totalInGroup + 1) > 0.6) {
       gender = "male";
@@ -322,7 +325,26 @@ function generateTestData(totalParticipants) {
     }
   }
 
-  return participants;
+  // Step 3: Generate summary stats
+  const summary = {};
+
+  for (const [groupLabel, counts] of Object.entries(participantsByAgeGroup)) {
+    const { males, females } = counts;
+    const total = males + females;
+
+    const maleRatio = total > 0 ? ((males / total) * 100).toFixed(1) : 0;
+    const femaleRatio = total > 0 ? ((females / total) * 100).toFixed(1) : 0;
+
+    summary[groupLabel] = {
+      males,
+      females,
+      total,
+      maleRatio: `${maleRatio}%`,
+      femaleRatio: `${femaleRatio}%`,
+    };
+  }
+
+  return { participants, summary };
 }
 
 api.post("/api/test/test-formTeams", (req, res) => {
@@ -340,7 +362,8 @@ api.post("/api/test/test-formTeams", (req, res) => {
       });
     }
 
-    const participants = generateTestData(noOfParticipants);
+    // Generate random dataset
+    const { participants, summary } = generateTestData(noOfParticipants);
 
     const { teams, notes } = formTeams({ participants });
 
@@ -358,6 +381,7 @@ api.post("/api/test/test-formTeams", (req, res) => {
       generatedData: {
         totalParticipants: participants.length,
         preRegisteredDuos: participants.filter((p) => p.invited_user_id).length,
+        summary
       },
       generaredParticipants: participants,
       teams: teams,
