@@ -15,7 +15,7 @@ export function Header(props){
     return false;
 
   // inject select
-  if (props.select)    
+  if (props.select)
     data.unshift({ name: 'select', title: 'Select', sort: false });
 
   // inject actions
@@ -68,8 +68,8 @@ export function Header(props){
           if (cell.name === 'select' && props.hasData){
             return (
               <th key={ index } className={ css }>
-                <Checkbox 
-                  className={ Style.checkbox } 
+                <Checkbox
+                  className={ Style.checkbox }
                   checked={ props.selectAll }
                   callback={ props.select }
                 />
@@ -83,10 +83,23 @@ export function Header(props){
 
           return (
             <th
-              key={ index }
-              className={ css }
-              onClick={ () => cell.sort && sort(index, cell.name) }>
-              { cell.title?.replaceAll('_', ' ') }
+              key={index}
+              className={css}
+              onClick={() => cell.sort && sort(index, cell.name)}
+            >
+              {cell.name === 'registered_count' ? (
+                <span className="inline-flex items-center gap-1">
+                  Registered Count
+                  <span
+                    className="text-gray-400 cursor-help"
+                    title="Only paid users are counted in this column"
+                  >
+                    ⓘ
+                  </span>
+                </span>
+              ) : (
+                cell.title?.replaceAll('_', ' ')
+              )}
             </th>
           );
         })}
