@@ -16,4 +16,5 @@ module.exports = [
     require('./team'),
     require('./group'),
     require('./test'),
+    require('./test2'),
 ];

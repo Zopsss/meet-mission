@@ -27,6 +27,7 @@ import { TeamsLists } from 'views/event-teams/lists';
 import { TeamsEditor } from 'views/event-teams/editor';
 import { ParticipantMessages } from 'views/participant-messages/groups';
 import { TeamFormation } from 'views/user-testing/team-formation';
+import { EventScheduler } from 'views/user-testing/event-schedular2';
 
 const Routes = [
   {
@@ -277,6 +278,12 @@ const Routes = [
     view: TeamFormation,
     layout: 'app',
     title: 'Test Team Formation'
+  },
+  {
+    path: '/test-group-formation-and-bars-hopping',
+    view: EventScheduler,
+    layout: 'app',
+    title: 'Test Group Formation and Bars Hopping'
   },
 ]
 

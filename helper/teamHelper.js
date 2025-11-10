@@ -48,31 +48,53 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
 
 // 🔹 Low-level scheduler (handles bar rotation + groups)
 function scheduleRoundsForAgeGroup(teams, rounds, bars, mode) {
+  const validation = validateSchedulerInputs(bars, mode, rounds);
+  if (!validation.isValid) {
+    const fullMessage = `Scheduling failed for Mode ${mode}: ${validation.message}`;
+    return {
+      success: false,
+      notes: [fullMessage],
+      groupsByRound: {}
+    };
+  }
+
+  const threePersonTeam = teams.find(t => Array.isArray(t.members) && t.members.length === 3);
+  // Create a list of all other teams
+  const standardTeams = threePersonTeam
+    ? teams.filter(t => t.team_id !== threePersonTeam.team_id)
+    : teams;
+
   const pairHistory = new Set(); // track all pairings across rounds
   const result = { success: true, groupsByRound: {} };
 
   // Round 1 → distribute evenly into bars
-  let barAssignments = distributeToBars(teams, bars);
+  const round1Assignments = distributeToBars(standardTeams, bars, threePersonTeam);
+  let barAssignments = round1Assignments;
 
   for (let r = 0; r < rounds; r++) {
     if (r === 0) {
-      // Round 1 already distributed
+      // For Round 1, we use the initial assignments directly.
+      barAssignments = round1Assignments;
+    } else if (mode === "A" && r === 1) {
+      // Use the new sophisticated rotator which needs the original Round 1 assignments.
+      barAssignments = rotateBarsForModeA(round1Assignments, bars);
     } else if (mode === "A" && r === 2) {
       // Round 3: stay in the same bar but reshuffle groups
       barAssignments = stayInSameBars(barAssignments);
     } else {
-      // Round 2 (or Mode B/C) → rotate bars
-      barAssignments = rotateBars(barAssignments, bars, mode, r);
+      barAssignments = reshuffleFor2RoundEvent(round1Assignments, bars);
     }
 
     let groupsForRound = [];
     for (const bar of bars) {
       const barTeams = barAssignments[bar._id] || [];
 
-      // Shuffle teams inside the bar to create new matchups
-      const shuffledTeams = shuffle(barTeams);
+      const specialTeamInThisBar = barTeams.find(t => t.team_id === threePersonTeam?.team_id);
+      const otherTeamsInBar = specialTeamInThisBar
+        ? barTeams.filter(t => t.team_id !== threePersonTeam.team_id)
+        : barTeams;
 
-      let barGroups = splitIntoGroups(shuffledTeams, 3, 5);
+      let barGroups = splitIntoBalancedGroups(otherTeamsInBar, 3, 5, specialTeamInThisBar);
 
       // Ensure no duplicate encounters (tries hard, but won’t cancel)
       barGroups = resolveDuplicates(barGroups, pairHistory, r + 1);
@@ -96,25 +118,58 @@ function shuffle(arr) {
 
 // ---- Helper Functions ----
 
-// distribute evenly across bars
-function distributeToBars(teams, bars) {
-  let assignments = {};
+/**
+ * Distributes teams evenly across available bars, with special handling for a larger team.
+ * If a specialTeam (e.g., a 3-person team) is provided, it is placed first into the
+ * bar with the highest capacity to prevent bottlenecks.
+ *
+ * @param {Array<Object>} teams - The array of standard team objects to distribute.
+ * @param {Array<Object>} bars - The list of all available bar objects.
+ * @param {Object|null} specialTeam - An optional team to be placed with priority.
+ * @returns {Object} The bar assignments. Key: bar_id, Value: array of teams.
+ */
+function distributeToBars(teams, bars, specialTeam = null) {
+  const assignments = {};
   bars.forEach(b => (assignments[b._id] = []));
 
-  // step 1: give each bar 1 team if enough
-  let shuffled = shuffle([...teams]);
-  bars.forEach((bar, i) => {
-    if (shuffled.length > 0) {
-      assignments[bar._id].push(shuffled.shift());
-    }
-  });
+  // Place the special team first in the bar with the highest capacity.
+  if (specialTeam && bars.length > 0) {
+    // Create a copy with [...bars] to avoid mutating the original array.
+    const sortedBars = [...bars].sort((a, b) => (b.available_spots || 0) - (a.available_spots || 0));
+    const highestCapacityBarId = sortedBars[0]._id;
+    assignments[highestCapacityBarId].push(specialTeam);
+  }
 
-  // step 2: distribute the rest evenly
+  // Distribute the rest of the standard teams evenly.
+  const shuffled = [...teams].sort(() => Math.random() - 0.5);
   shuffled.forEach((t, i) => {
+    // Use modulo to cycle through bars for even distribution.
     assignments[bars[i % bars.length]._id].push(t);
   });
 
   return assignments;
+}
+
+function reshuffleFor2RoundEvent(round1Assignments, allBars) {
+  const newAssignments = {};
+  allBars.forEach(b => (newAssignments[b._id] = []));
+
+  for (const sourceBarId of Object.keys(round1Assignments)) {
+    const teamsToMove = round1Assignments[sourceBarId];
+    const destinationBars = allBars.filter(b => b._id !== sourceBarId);
+
+    if (destinationBars.length === 0) {
+        newAssignments[sourceBarId].push(...teamsToMove);
+        continue;
+    }
+
+    teamsToMove.forEach((team, i) => {
+      const destinationBar = destinationBars[i % destinationBars.length];
+      newAssignments[destinationBar._id].push(team);
+    });
+  }
+
+  return newAssignments;
 }
 
 // simple rotation: A->B, B->C, C->A
@@ -132,21 +187,136 @@ function rotateBars(prevAssignments, bars, mode, roundNum) {
   return newAssignments;
 }
 
+/**
+ * Handles the sophisticated bar rotation and team assignment for Round 2 of a Mode A event.
+ *
+ * This function implements two key rules:
+ * 1.  **Smart Rotation:** It tries to move teams to new bars but allows some to stay if it helps create
+ *     better, conflict-free groups. It ensures not everyone stays in the same place.
+ * 2.  **Start Bar Rule:** It constructs new groups by attempting to pull ONE team from each of the
+ *     original starting bars from Round 1, ensuring maximum participant mixing.
+ *
+ * @param {Object} round1Assignments - The bar assignments from Round 1. Key: bar_id, Value: array of teams.
+ * @param {Array<Object>} allBars - The list of all available bar objects for this age group.
+ * @returns {Object} The new bar assignments for Round 2. Key: bar_id, Value: array of teams.
+ */
+function rotateBarsForModeA(round1Assignments, allBars) {
+  const newAssignments = {};
+  allBars.forEach(b => (newAssignments[b._id] = []));
+
+  const sourcePools = JSON.parse(JSON.stringify(round1Assignments));
+  const sourceBarIds = Object.keys(sourcePools);
+
+  for (const targetBar of allBars) {
+    const targetBarId = targetBar._id;
+    const teamsInTargetBar = newAssignments[targetBarId];
+
+    const totalTeams = Object.values(sourcePools).flat().length;
+    const numBars = allBars.length;
+    const baseSize = Math.floor(totalTeams / numBars);
+    const remainder = totalTeams % numBars;
+    // This logic determines how many bars get an extra team.
+    const targetGroupSize = baseSize + (allBars.findIndex(b => b._id === targetBarId) < remainder ? 1 : 0);
+
+    for (let i = 0; i < targetGroupSize; i++) {
+      const sourceBarId = sourceBarIds[i % sourceBarIds.length];
+      const sourcePool = sourcePools[sourceBarId];
+
+      if (sourcePool && sourcePool.length > 0) {
+        const teamToMove = sourcePool.shift();
+        teamsInTargetBar.push(teamToMove);
+      }
+    }
+  }
+
+  // Sanity check: Ensure at least one team has actually moved.
+  // This prevents a scenario where every team ends up back in its original bar.
+  const didMove = Object.values(newAssignments).flat().some(team => {
+      const originalBar = Object.keys(round1Assignments).find(barId =>
+          round1Assignments[barId].some(t => t.team_id === team.team_id)
+      );
+      const newBar = Object.keys(newAssignments).find(barId =>
+          newAssignments[barId].some(t => t.team_id === team.team_id)
+      );
+      return originalBar !== newBar;
+  });
+
+  if (!didMove && allBars.length > 1) {
+      // If no one moved (e.g., total teams equals total bars), force a simple rotation.
+      // This is a fallback to prevent a stagnant round.
+      console.warn("Mode A fallback: Forcing a simple rotation as the initial assignment resulted in no movement.");
+      return rotateBars(round1Assignments, allBars);
+  }
+
+  return newAssignments;
+}
+
 // mode A round 3: stay in same bar
 function stayInSameBars(prevAssignments) {
   return JSON.parse(JSON.stringify(prevAssignments));
 }
 
-// split into groups of 3–5
-function splitIntoGroups(teams, minSize = 3, maxSize = 5) {
-  const groups = [];
-  let shuffled = shuffle([...teams]);
-  while (shuffled.length > 0) {
-    let size = Math.min(maxSize, Math.max(minSize, Math.floor(shuffled.length / 2)));
-    groups.push(shuffled.splice(0, size));
+/**
+ * Splits a list of teams into perfectly balanced groups.
+ * If a specialTeam is provided, it is intentionally placed into one of the larger subgroups
+ * to better balance participant distribution within the bar.
+ *
+ * @param {Array<Object>} standardTeams - The array of standard teams to be split.
+ * @param {number} minSize - The minimum number of teams allowed in a group.
+ * @param {number} maxSize - The maximum number of teams allowed in a group.
+ * @param {Object|null} specialTeam - An optional team to be placed with priority into a larger group.
+ * @returns {Array<Array<Object>>} An array of groups.
+ */
+function splitIntoBalancedGroups(standardTeams, minSize = 3, maxSize = 5, specialTeam = null) {
+  const totalTeams = standardTeams.length + (specialTeam ? 1 : 0);
+  if (totalTeams === 0) return [];
+  if (totalTeams < minSize) {
+    // If we can't meet the min size, return one group with all teams.
+    return [specialTeam ? [specialTeam, ...standardTeams] : standardTeams];
   }
+
+  const targetSize = 4;
+  const numGroups = Math.max(1, Math.round(totalTeams / targetSize));
+  const baseSize = Math.floor(totalTeams / numGroups);
+  const remainder = totalTeams % numGroups;
+
+  const groups = [];
+  const shuffledStandardTeams = [...standardTeams].sort(() => Math.random() - 0.5);
+  let currentIndex = 0;
+  let specialTeamPlaced = false;
+
+  for (let i = 0; i < numGroups; i++) {
+    const isLargerGroup = i < remainder;
+    let currentGroupSize = baseSize + (isLargerGroup ? 1 : 0);
+    const group = [];
+
+    // If this is one of the larger groups and we have a special team to place, add it first.
+    if (isLargerGroup && specialTeam && !specialTeamPlaced) {
+      group.push(specialTeam);
+      specialTeamPlaced = true;
+    }
+
+    // Fill the rest of the group with standard teams.
+    const needed = currentGroupSize - group.length;
+    if (needed > 0) {
+      group.push(...shuffledStandardTeams.slice(currentIndex, currentIndex + needed));
+      currentIndex += needed;
+    }
+    groups.push(group);
+  }
+
+  // Fallback: If the special team couldn't be placed (e.g., all groups are same size), add it to the first group.
+  if (specialTeam && !specialTeamPlaced) {
+      if (groups.length > 0) {
+          groups[0].push(specialTeam);
+      } else {
+          groups.push([specialTeam]); // Should be an edge case
+      }
+  }
+
   return groups;
 }
+
 function resolveDuplicates(groups, pairHistory, roundNumber) {
   const hasDuplicate = (group) => {
     for (let i = 0; i < group.length; i++) {
@@ -186,6 +356,50 @@ function resolveDuplicates(groups, pairHistory, roundNumber) {
   }
 
   return groups;
+}
+
+/**
+ * Validates if the provided inputs are sufficient to run a valid event schedule.
+ *
+ * This function checks if there are enough bars available for the selected event mode
+ * to ensure that core rules (like bar rotation) can be met.
+ *
+ * @param {Array<Object>} bars - The list of available bar objects.
+ * @param {string} mode - The event mode ('A', 'B', or 'C').
+ * @param {number} rounds - The number of rounds for the event.
+ * @returns {{isValid: boolean, message: string}} An object where `isValid` is true if validation passes,
+ *                                                 and `message` contains an error string if it fails.
+ */
+function validateSchedulerInputs(bars, mode, rounds) {
+  const numBars = bars.length;
+  let requiredBars = 0;
+  let errorMessage = "";
+
+  if (mode === "C") {
+    // Mode C runs with 2 groups and requires a bar switch.
+    requiredBars = 2;
+    if (numBars < requiredBars) {
+      errorMessage = `Mode C requires at least ${requiredBars} bars, but only ${numBars} were provided. Cannot guarantee that teams visit two different bars.`;
+    }
+  } else if (mode === "B") {
+    // Mode B runs with 3 groups, ideally each in its own bar for Round 1.
+    requiredBars = 3;
+    if (numBars < requiredBars) {
+      errorMessage = `Mode B requires at least ${requiredBars} bars for proper group distribution, but only ${numBars} were provided.`;
+    }
+  } else if (mode === "A" && rounds > 1) {
+    // Mode A needs to be able to rotate teams.
+    requiredBars = 2; // A modest requirement, but prevents stagnant 1-bar events.
+    if (numBars < requiredBars) {
+      errorMessage = `A multi-round Mode A event requires at least ${requiredBars} bars to allow for rotation, but only ${numBars} were provided.`;
+    }
+  }
+
+  if (errorMessage) {
+    return { isValid: false, message: errorMessage };
+  }
+
+  return { isValid: true, message: "" };
 }
 
 // function checkBarCapacities(groupsAndRounds, bars) {

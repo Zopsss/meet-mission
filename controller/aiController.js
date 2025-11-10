@@ -21,7 +21,7 @@ const {buildGroupsAndRoundsByAge, verifyGroups, dedupeBalanceReport, checkBarCap
 exports.generateTeamGroup = async function(){
   const events = await eventModel.getEventCron({ day: 3, generated: false });
   // console.log(JSON.stringify(events), 'events');
-  
+
   if(events?.length){
     const handleGroupTeams = await Promise.all(events.map(async (event) => {
       const registeredParticipants = await transaction.getParticipantsCron({ event_id: new mongoose.Types.ObjectId(event._id)})
@@ -81,6 +81,39 @@ exports.generateTeamGroup = async function(){
 
         // console.log(JSON.stringify(simplifiedCancelledTeams), 'cancelled teams');
         // console.log(JSON.stringify(cancelledTeams), 'GROUP cancelledTeams');
+
+        // Check for a hard scheduling failure from the validator.
+        const hardFailureNote = notes.find(note => note.startsWith("Scheduling failed"));
+
+        if (hardFailureNote) {
+          console.error(`CRITICAL: Could not generate schedule for event ${event._id}. Reason: ${hardFailureNote}`);
+
+          let message = `Hello admin,\n\n\n\n❌ A critical error occurred while generating the schedule for event: ${event.tagline}.\n\n`;
+          message += `The process was halted because the event's setup is invalid.\n\n`;
+          message += `Error Details: ${hardFailureNote}\n\n`;
+          message += `Please correct the event's configuration (e.g., add more bars) in the admin panel. No groups or teams have been saved for the affected age group.\n`;
+
+          const adminAccounts = await mongoose.model("Account").find({ name: "Master", active: true }).select('id').lean();
+          const adminUserIds = adminAccounts.map(account => account.id);
+          const adminUsers = await mongoose.model("User").find({ default_account: { $in: adminUserIds } }).select('email name').lean();
+          for (const adminUser of adminUsers) {
+            await mail.send({
+              to: adminUser.email,
+              locale: 'en',
+              template: 'template',
+              subject: `URGENT ACTION REQUIRED: Event Setup Invalid for ${event.tagline}`,
+              content: {
+                body: message,
+                closing: 'Best Regards,',
+                button: { url: process.env.MISSION_CONTROL_CLIENT, label: 'Go to Admin App' }
+              }
+            });
+          }
+
+          // IMPORTANT: Stop processing for this event and move to the next one.
+          return { message: `Event ${event._id} failed validation. Process halted.` };
+        }
+
         const check = verifyGroups(groupsAndRounds);
 
         // console.log("Errors:", check.errors);
@@ -108,10 +141,10 @@ exports.generateTeamGroup = async function(){
             for (const bar of bars) {
               const groups = bar.groups || [];
               console.log(bar, 'barrrr');
-              
+
               for (const [groupIndex, group] of groups.entries()) {
                 console.log(group, 'innnn');
-                
+
                 const team_ids = group.map((t) => teamMap.get(t.team_name));
 
                 await groupModel.add({
@@ -155,7 +188,7 @@ exports.generateTeamGroup = async function(){
                       },
                     }
                   );
-                  
+
                   // Calculate amount user actually paid
                   const txDocs = await mongoose.model('Transaction').find({
                     user_id: new mongoose.Types.ObjectId(member.user_id),
@@ -163,13 +196,13 @@ exports.generateTeamGroup = async function(){
                     status: 'paid',
                     type: 'Register Event'
                   }).lean();
-                  
+
                   const amountOffCents = Math.round(
                     (txDocs || []).reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount * 100 : 0), 0)
                   );
-                  
+
                   if (!amountOffCents) throw new Error('No paid transaction found for this user');
-                  
+
                   // Create coupon and promotion code (single-use)
                   const coupon = await stripe.coupon.createOnce({
                     amount_off: amountOffCents,
@@ -186,7 +219,7 @@ exports.generateTeamGroup = async function(){
                     max_redemptions: 1,
                     metadata: { user_id: String(member.user_id), event_id: String(event._id), coupon_id: coupon.id }
                   });
-                  
+
                   // Email user with voucher code
                   await mail.send({
                     to: member.email,
@@ -229,12 +262,12 @@ exports.generateTeamGroup = async function(){
           }).select('email name').lean();
           for (const adminUser of adminUsers) {
             await mail.send({
-              
+
               to: adminUser.email,
               locale: 'en',
               template: 'template',
               subject: `${event.city.name} - ${event.tagline} locations need attention!`,
-              content: { 
+              content: {
                 body: message,
                 closing: 'Best Regards,',
                 button: {
@@ -255,7 +288,7 @@ exports.generateTeamGroup = async function(){
       }
     }))
   }
-  
+
   return events
 }
 
@@ -279,11 +312,11 @@ exports.eventStartReminder = async function(){
                 group_name: group.group_name,
                 bar_name: group.bar_id.name,
                 bar_address: group.bar_id.address
-                
+
               }));
 
             // console.log(sortedGroups, event, 'sort');
-              
+
             const emailData = {
               name: `${reg.first_name}`,
               date: event.date && utility.formatDateString(event.date),
@@ -356,12 +389,12 @@ exports.eventStartReminder = async function(){
             })
 
             await mail.send({
-              
+
               to: emailData.email,
               locale: reg.locale || 'de',
               template: 'template',
               subject: i18n.__('job.reminder_event.subject'),
-              content: { 
+              content: {
                 body,
                 closing: i18n.__('job.reminder_event.closing'),
                 button: {
@@ -372,7 +405,7 @@ exports.eventStartReminder = async function(){
             })
             // console.log(emailData, body, 'emailData');
           }
-          
+
         }
       }))
     }))
@@ -391,7 +424,7 @@ exports.swipeEventStartReminder = async function(){
         if(team){
           const group = await groupModel.getByTeamId({ id: team._id})
           if(group?.length){
-              
+
             const emailData = {
               name: `${reg.first_name}`,
               date: event.date && utility.formatDateString(event.date),
@@ -417,12 +450,12 @@ exports.swipeEventStartReminder = async function(){
             })
 
             await mail.send({
-              
+
               to: emailData.email,
               locale: reg.locale || 'de',
               template: 'template',
               subject: i18n.__('job.reminder_event_swipe.subject'),
-              content: { 
+              content: {
                 body,
                 closing: i18n.__('job.reminder_event_swipe.closing'),
                 button: {
@@ -433,7 +466,7 @@ exports.swipeEventStartReminder = async function(){
             })
             // console.log(emailData, body, 'emailData');
           }
-          
+
         }
       }))
     }))
@@ -444,7 +477,7 @@ exports.swipeEventStartReminder = async function(){
 exports.eventEndReminder = async function(){
   const events = await eventModel.getEndEventCron({ generated: true });
   console.log(events, 'events');
-  
+
   if(events?.length){
     const handleGroupTeams = await Promise.all(events.map(async (event) => {
       const registeredParticipants = await participants.getRegistered({ event_id: new mongoose.Types.ObjectId(event._id), isValid: true})
@@ -457,7 +490,7 @@ exports.eventEndReminder = async function(){
             eventId: new mongoose.Types.ObjectId(event._id),
             userId: new mongoose.Types.ObjectId(reg.user_id),
           });
-          
+
           if(group?.length && !hasConfirmedMatch){
             const emailData = {
               name: `${reg.first_name}`,
@@ -475,12 +508,12 @@ exports.eventEndReminder = async function(){
             })
 
             await mail.send({
-              
+
               to: emailData.email,
               locale: reg.locale || 'de',
               template: 'template',
               subject: i18n.__('job.reminder_event_end.subject'),
-              content: { 
+              content: {
                 body,
                 closing: i18n.__('job.reminder_event_end.closing'),
                 button: {
@@ -491,7 +524,7 @@ exports.eventEndReminder = async function(){
             })
             // console.log(emailData, body, 'emailData');
           }
-          
+
         }
       }))
     }))
