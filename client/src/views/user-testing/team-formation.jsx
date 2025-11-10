@@ -96,6 +96,7 @@ export function TeamFormation() {
         <div>
           {error && <p className="text-red-500 text-center">{error}</p>}
           {isLoading && <p className="text-center">Loading data...</p>}
+
           {apiData && (
             <div className="grid grid-cols-1 lg:grid-cols-2">
               {/* Participants Table */}
@@ -112,7 +113,6 @@ export function TeamFormation() {
                     </div>
                   </div>
                 )}
-
 
                 <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
                   Stats:

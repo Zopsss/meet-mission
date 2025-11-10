@@ -328,12 +328,21 @@ function generateTestData(totalParticipants) {
   // Step 3: Generate summary stats
   const summary = {};
 
+  const cancelledAgeGroups = new Set();
+  const notes = [];
+
   for (const [groupLabel, counts] of Object.entries(participantsByAgeGroup)) {
     const { males, females } = counts;
     const total = males + females;
 
     const maleRatio = total > 0 ? ((males / total) * 100).toFixed(1) : 0;
     const femaleRatio = total > 0 ? ((females / total) * 100).toFixed(1) : 0;
+    const isValidRatio = maleRatio >= 40 && maleRatio <= 60 && femaleRatio >= 40 && femaleRatio <= 60;
+
+    if (!isValidRatio) {
+      notes.push(`Gender ratio out of bounds in age group ${groupLabel}: Males ${maleRatio}%, Females ${femaleRatio}%. Teams couldn't be formed for it.`);
+      cancelledAgeGroups.add(groupLabel);
+    }
 
     summary[groupLabel] = {
       males,
@@ -344,7 +353,13 @@ function generateTestData(totalParticipants) {
     };
   }
 
-  return { participants, summary };
+  if (cancelledAgeGroups.size > 0) {
+    participants = participants.filter(
+      (p) => !cancelledAgeGroups.has(getAgeGroup(p.age))
+    );
+  }
+
+  return { participants, summary, notes };
 }
 
 api.post("/api/test/test-formTeams", (req, res) => {
@@ -363,9 +378,13 @@ api.post("/api/test/test-formTeams", (req, res) => {
     }
 
     // Generate random dataset
-    const { participants, summary } = generateTestData(noOfParticipants);
+    const { participants, summary, notes: cancelledNotes } = generateTestData(noOfParticipants);
 
     const { teams, notes } = formTeams({ participants });
+
+    if (cancelledNotes.length > 0) {
+      notes.unshift(...cancelledNotes);
+    }
 
     const simplifiedTeams = teams.map((team) => ({
       team_id: team.team_id,
