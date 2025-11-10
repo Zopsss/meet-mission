@@ -52,8 +52,8 @@ function memberShape(p) {
 }
 
 function formTeams(input) {
-  console.log("-----------------------------------");
-  console.log("forming team...");
+  // console.log("-----------------------------------");
+  // console.log("forming team...");
   const participants = input.participants || [];
   const notes = [];
   const teams = [];
@@ -62,8 +62,8 @@ function formTeams(input) {
   // Buckets by age_group
   const byAge = new Map();
   AGE_GROUPS.forEach((g) => byAge.set(g.label, []));
-  console.log("byAge: ", byAge);
-  console.log("participants: ", participants);
+  // console.log("byAge: ", byAge);
+  // console.log("participants: ", participants);
 
   function createTeam(members, age_group, already_registered_together = false) {
     teams.push({
