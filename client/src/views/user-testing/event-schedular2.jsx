@@ -54,7 +54,7 @@ export function EventScheduler() {
     { id: 11, capacity: "60" },
     { id: 12, capacity: "72" },
   ]);
-  const [nextBarId, setNextBarId] = useState(5); // To ensure unique keys
+  const [nextBarId, setNextBarId] = useState(13); // ensure unique keys (there are 12 initial bars)
 
   const [apiData, setApiData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -98,41 +98,30 @@ export function EventScheduler() {
       setIsLoading(false);
       return;
     }
+
     // Prepare bar data for the API (remove client-side ID)
     const formattedBarInputs = barInputs.map(({ capacity }) => ({
       capacity: Number(capacity),
     }));
 
     try {
-      const res = await Axios.post("/api/test/test-groupAndBars2", {
+      // call the new endpoint
+      const res = await Axios.post("/api/test/groupAndBarsModified", {
         noOfParticipants: participants,
         bars: formattedBarInputs,
       });
+
+      // API returns: { message, notes, summary } (summary: { ageGroup: [ ... ] })
       console.log("API Response: ", res.data);
 
-      const allTeams = Object.values(res.data.report)
-        .filter((data) => data.teams) // Filter out cancelled groups that don't have teams
-        .flatMap((ageGroupData) => ageGroupData.teams);
-
-      const sortedParticipants = [...res.data.generatedData.participants].sort(
-        (a, b) => a.age - b.age
-      );
-      // Ensure allTeams is an array before sorting
-      const sortedTeams = Array.isArray(allTeams)
-        ? [...allTeams].sort(
-            (a, b) =>
-              (a.members?.[0]?.age ?? Infinity) -
-              (b.members?.[0]?.age ?? Infinity)
-          )
-        : [];
+      // Build safe apiData so UI sections that expect generatedData don't crash
+      const safeGeneratedData = res.data.generatedData || { participants: [], bars: [] };
 
       setApiData({
-        ...res.data,
-        generatedData: {
-          ...res.data.generatedData,
-          participants: sortedParticipants,
-        },
-        allTeams: sortedTeams,
+        notes: res.data.notes || [],
+        summary: res.data.summary || {},
+        stats: res.data.stats || {},
+        generatedData: safeGeneratedData,
       });
     } catch (err) {
       console.error("API Error: ", err);
@@ -235,7 +224,7 @@ export function EventScheduler() {
           )}
           {isLoading && (
             <p className="text-center text-lg text-indigo-600">
-              Generating and scheduling, please wait...
+              Generating and scheduling...
             </p>
           )}
 
@@ -243,387 +232,120 @@ export function EventScheduler() {
             <div>
               <Accordion title="Scheduler Notes" defaultOpen={true}>
                 <div className="text-center text-gray-600 space-y-1">
-                  {apiData.notes.map((note, index) => (
-                    <p key={index}>{note}</p>
-                  ))}
+                  {apiData.notes.length === 0 ? (
+                    <p>No notes returned.</p>
+                  ) : (
+                    apiData.notes.map((note, index) => <p key={index}>{note}</p>)
+                  )}
                 </div>
               </Accordion>
+              
+              <Accordion title={"Stats"} defaultOpen={true}>
+                <table className="divide-y divide-gray-200 border w-full">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Age Group
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Number of Participants
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Male Percentage
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Female Percentage
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
 
-              <Accordion
-                title={`Generated Participants (${apiData.generatedData.participants.length})`}
-              >
-                <div className="overflow-auto max-h-[60vh]">
-                  <table className="divide-y divide-gray-200 border w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Participant ID
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          First Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Last Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Gender
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Date Of Birth
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age Group
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {apiData.generatedData.participants.map((p) => (
-                        <tr key={p._id}>
-                          <td className="px-4 py-3 text-center text-sm font-mono">
-                            {p._id?.substring(5)}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.first_name}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.last_name}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.gender}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.date_of_birth || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.age || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {getAgeGroup(p.age)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Accordion>
-
-              <Accordion title={`Formed Teams (${apiData.allTeams.length})`}>
-                <div className="overflow-auto max-h-[60vh]">
-                  <table className="divide-y divide-gray-200 w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 1
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 2
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 3
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Pre-Registered
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age Group
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {apiData.allTeams.map((team) => {
-                        const [m1, m2, m3] = team.members;
-                        return (
-                          <tr key={team.team_id}>
-                            <td className="px-4 py-3 text-center text-sm font-semibold">
-                              {team.team_name}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m1
-                                ? `${m1.first_name} ${m1.last_name} (${m1.gender}, ${m1.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m2
-                                ? `${m2.first_name} ${m2.last_name} (${m2.gender}, ${m2.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m3
-                                ? `${m3.first_name} ${m3.last_name} (${m3.gender}, ${m3.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {team.already_registered_together ? `Yes` : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {team.age_group}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </Accordion>
-
-              <Accordion
-                title={`Generated Bars (${apiData.generatedData.bars.length})`}
-              >
-                <div className="overflow-auto max-h-[60vh]">
-                  <table className="divide-y divide-gray-200 border w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Bar ID
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Bar Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Capacity
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {apiData.generatedData.bars.map((bar) => (
-                        <tr key={bar._id}>
-                          <td className="px-4 py-3 text-center text-sm font-mono">
-                            {bar._id}
-                          </td>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {Object.entries(apiData.stats).map(
+                      ([ageGroup, stats]) => (
+                        <tr key={ageGroup}>
                           <td className="px-4 py-3 text-center text-sm font-semibold">
-                            {bar.name}
+                            {ageGroup}
                           </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {bar.available_spots}
+                          <td className="px-4 py-3 text-center text-sm">{stats.total}</td>
+                          <td className="px-4 py-3 text-center text-sm text-blue-600 font-mono">
+                            {stats.status !== "Cancelled" ? stats.maleRatio : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
+                            {stats.status !== "Cancelled" ? stats.femaleRatio : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
+                            {stats.status}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      )
+                    )}
+                  </tbody>
+                </table>
               </Accordion>
 
-              {Object.entries(apiData.report)
-                .sort(
-                  ([groupA], [groupB]) =>
-                    getAgeGroupOrder(groupA) - getAgeGroupOrder(groupB)
-                )
-                .map(([ageGroup, data]) => (
+              {/* --- Simplified Age Group Summary Tables --- */}
+              {Object.entries(apiData.summary)
+                .sort(([a], [b]) => getAgeGroupOrder(a) - getAgeGroupOrder(b))
+                .map(([ageGroup, groups]) => (
                   <Accordion
                     key={ageGroup}
-                    title={`Age Group Report: ${ageGroup}`}
+                    title={`Age Group: ${ageGroup} — ${Array.isArray(groups) ? groups.length : 0} groups`}
                     defaultOpen={true}
                   >
-                    <div className="bg-gray-50 p-4 rounded-md mb-4 flex items-center justify-center text-center">
-                      <div>
-                        <p className="text-sm text-gray-500">Status</p>
-                        <p
-                          className={`font-bold text-lg ${
-                            data.status === "Cancelled"
-                              ? "text-red-500"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {data.status}
-                        </p>
-                      </div>
-                      {data.status === "Scheduled" && (
-                        <>
-                          <div className="ml-4 mr-4">
-                            <p className="text-sm text-gray-500">Mode</p>
-                            <p className="font-bold text-lg text-indigo-600">
-                              {data.mode}
-                            </p>
-                          </div>
-                          <div className="mr-4">
-                            <p className="text-sm text-gray-500">Rounds</p>
-                            <p className="font-bold text-lg">
-                              {data.totalRounds}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      <div>
-                        <p className="text-sm text-gray-500">Teams</p>
-                        <p className="font-bold text-lg">{data.teamCount}</p>
-                      </div>
-                    </div>
-
-                    {data.status === "Scheduled" &&
-                      Object.entries(data.schedule).map(
-                        ([roundName, barList]) => {
-                          // ✅ --- FIX: `barList` is now correctly identified as an array of BAR objects ---
-                          const roundNum = parseInt(
-                            roundName.replace("Round ", ""),
-                            10
-                          );
-                          const nextRoundBarList =
-                            data.schedule[`Round ${roundNum + 1}`];
-
-                          // --- Build a map to find the next bar for any team ---
-                          const nextBarMap = new Map();
-                          if (nextRoundBarList) {
-                            // Iterate over each BAR in the next round
-                            for (const bar of nextRoundBarList) {
-                              // Iterate over the GROUPS within that bar
-                              for (const group of bar.groups) {
-                                // Iterate over the TEAMS within that group
-                                for (const team of group.teams) {
-                                  nextBarMap.set(team.team_id, bar.bar_name);
-                                }
-                              }
-                            }
-                          }
-
-                          // ✅ --- FIX: Flatten teams by iterating through bars -> groups -> teams ---
-                          const teamsInRound = barList
-                            .flatMap((bar) =>
-                              bar.groups.flatMap((group) =>
-                                group.teams.map((team) => ({
-                                  ...team,
-                                  currentBar: bar.bar_name,
-                                  groupName: group.group_name,
-                                }))
-                              )
-                            )
-                            .sort((a, b) => {
-                              if (a.groupName < b.groupName) return -1;
-                              if (a.groupName > b.groupName) return 1;
-                              return a.team_name.localeCompare(b.team_name);
-                            });
-
-                          // ✅ --- FIX: Create summary by iterating through bars -> groups ---
-                          const roundSummary = barList
-                            .flatMap((bar) =>
-                              bar.groups.map((group) => {
-                                const participantCount = group.teams.reduce(
-                                  (sum, team) => sum + team.members.length,
-                                  0
+                    {(!Array.isArray(groups) || groups.length === 0) ? (
+                      <div className="text-center text-gray-600">No groups for this age group.</div>
+                    ) : (
+                      <div className="overflow-auto">
+                        <table className="divide-y divide-gray-200 border w-full">
+                          <thead className="bg-gray-100 sticky top-0">
+                            <tr>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Round</th>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Teams</th>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Participants</th>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Bar</th>
+                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Seats</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {groups.map((g, idx) => {
+                              // If cancelled entry format from backend
+                              if (g.status === "Cancelled") {
+                                return (
+                                  <tr key={`cancel-${idx}`}>
+                                    <td colSpan={5} className="px-4 py-3 text-center text-sm text-red-600">
+                                      Cancelled: {g.reason || "No reason provided"}
+                                    </td>
+                                  </tr>
                                 );
-                                return {
-                                  groupName: group.group_name,
-                                  barName: bar.bar_name,
-                                  barCapacity: bar.bar_capacity,
-                                  participantCount: participantCount,
-                                };
-                              })
-                            )
-                            .sort((a, b) =>
-                              a.groupName.localeCompare(b.groupName)
-                            );
+                              }
 
-                          return (
-                            <div key={roundName} className="mt-6">
-                              <h3 className="text-lg font-semibold mb-2">
-                                {roundName} Schedule
-                              </h3>
-                              <div className="overflow-auto max-h-[60vh]">
-                                <table className="divide-y divide-gray-200 border w-full">
-                                  <thead className="bg-gray-100 sticky top-0">
-                                    <tr>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Team Name
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Group Name
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Current Bar
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Next Bar
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="bg-white divide-y divide-gray-200">
-                                    {teamsInRound.map((team) => (
-                                      <tr key={team.team_id}>
-                                        <td className="px-4 py-3 text-center text-sm font-semibold">
-                                          {team.team_name}
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-sm">
-                                          {team.groupName}
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-sm">
-                                          {team.currentBar}
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-sm font-semibold text-blue-600">
-                                          {nextBarMap.get(team.team_id) ||
-                                            "--- End ---"}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                              <div className="mt-6">
-                                <h4 className="text-md font-semibold mb-2">
-                                  {roundName} Capacity Summary
-                                </h4>
-                                <table className="divide-y divide-gray-200 border w-full">
-                                  <thead className="bg-gray-100">
-                                    <tr>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Group Name
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Total Participants
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Bar
-                                      </th>
-                                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                                        Bar Capacity
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="bg-white divide-y divide-gray-200">
-                                    {roundSummary.map((summary) => {
-                                      const isOverCapacity =
-                                        summary.participantCount >
-                                        summary.barCapacity;
-                                      return (
-                                        <tr key={summary.groupName}>
-                                          <td className="px-4 py-3 text-center text-sm font-semibold">
-                                            {summary.groupName}
-                                          </td>
-                                          <td
-                                            className={`px-4 py-3 text-center text-sm font-bold ${
-                                              isOverCapacity
-                                                ? "text-red-600"
-                                                : ""
-                                            }`}
-                                          >
-                                            {summary.participantCount}
-                                          </td>
-                                          <td className="px-4 py-3 text-center text-sm">
-                                            {summary.barName}
-                                          </td>
-                                          <td
-                                            className={`px-4 py-3 text-center text-sm font-bold ${
-                                              isOverCapacity
-                                                ? "text-red-600"
-                                                : ""
-                                            }`}
-                                          >
-                                            {summary.barCapacity}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          );
-                        }
-                      )}
+                              const teamsText = Array.isArray(g.teams)
+                                ? g.teams.join(", ")
+                                : (typeof g.teams === "string" ? g.teams : "");
+
+                              const participantsCount = g.total_participants ?? g.totalParticipants ?? 0;
+                              const seats = g.bar_seats ?? g.barSeats ?? g.barCapacity ?? "N/A";
+                              const barName = g.bar_name ?? g.barName ?? "-";
+
+                              return (
+                                <tr key={`${ageGroup}-${g.group_name ?? idx}`}>
+                                  <td className="px-4 py-3 text-center text-sm font-semibold">
+                                    {g.group_name ?? `Group ${idx + 1}`}
+                                  </td>
+                                  <td className="px-4 py-3 text-center text-sm">{teamsText}</td>
+                                  <td className="px-4 py-3 text-center text-sm">{participantsCount}</td>
+                                  <td className="px-4 py-3 text-center text-sm">{barName}</td>
+                                  <td className="px-4 py-3 text-center text-sm font-semibold">{seats}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </Accordion>
                 ))}
             </div>

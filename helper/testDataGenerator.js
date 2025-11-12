@@ -113,11 +113,27 @@ function generateParticipantData(totalParticipants) {
     const groupCounts = participantsByAgeGroup[ageGroup];
     const totalInGroup = groupCounts.males + groupCounts.females;
 
-    if (totalInGroup < 10) {
+    // Calculate what the ratio would be if we add male or female
+    const maleRatioIfMale = (groupCounts.males + 1) / (totalInGroup + 1);
+    const femaleRatioIfFemale = (groupCounts.females + 1) / (totalInGroup + 1);
+
+    // Check if adding a male would exceed the 60% limit
+    const canAddMale = maleRatioIfMale <= 0.6;
+    // Check if adding a female would exceed the 60% limit
+    const canAddFemale = femaleRatioIfFemale <= 0.6;
+
+    if (canAddMale && canAddFemale) {
+      // Both genders are within limits, choose randomly
       gender = Math.random() < 0.5 ? "male" : "female";
-    } else if ((groupCounts.males + 1) / (totalInGroup + 1) > 0.6) {
+    } else if (canAddMale && !canAddFemale) {
+      // Only male is within limits
       gender = "male";
+    } else if (!canAddMale && canAddFemale) {
+      // Only female is within limits
+      gender = "female";
     } else {
+      // This should theoretically never happen if logic is correct
+      // But as a fallback, choose randomly
       gender = Math.random() < 0.5 ? "male" : "female";
     }
 
@@ -177,7 +193,6 @@ function generateParticipantData(totalParticipants) {
 
   const summary = {};
   const cancelledAgeGroups = new Set();
-  const notes = [];
 
   for (const [groupLabel, counts] of Object.entries(participantsByAgeGroup)) {
     const { males, females } = counts;
@@ -190,12 +205,20 @@ function generateParticipantData(totalParticipants) {
       maleRatio <= 60 &&
       femaleRatio >= 40 &&
       femaleRatio <= 60;
+      
+      
+    let status;
+    if (total >= 24) {
+      status = "A";
+    } else if (total >= 18) {
+      status = "B";
+    } else {
+      status = "C";
+    }
 
     if (!isValidRatio) {
-      notes.push(
-        `Gender ratio out of bounds in age group ${groupLabel}: Males ${maleRatio}%, Females ${femaleRatio}%. Teams couldn't be formed for it.`
-      );
       cancelledAgeGroups.add(groupLabel);
+      status = "Cancelled";
     }
 
     summary[groupLabel] = {
@@ -204,6 +227,7 @@ function generateParticipantData(totalParticipants) {
       total,
       maleRatio: `${maleRatio}%`,
       femaleRatio: `${femaleRatio}%`,
+      status
     };
   }
 
@@ -213,7 +237,7 @@ function generateParticipantData(totalParticipants) {
     );
   }
 
-  return { participants, summary, notes };
+  return { participants, summary };
 }
 
 /**
