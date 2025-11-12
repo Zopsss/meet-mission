@@ -91,7 +91,8 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
     const teamBarHistory = new Map();
     for (const group of round1Assignments) {
       for (const team of group.teams) {
-        teamBarHistory.set(team.team_id, [group.bar_id]);
+        console.log("team for bar history: ", team);
+        teamBarHistory.set(team.team_name, [group.bar_id]);
       }
     }
 
@@ -365,7 +366,7 @@ function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
   return {
     success: true,
     roundAssignments: round1Blueprint.map((group) => ({
-      group_id: `group_${group.bar._id}_r1`,
+      group_id: `Round 1`,
       bar_id: group.bar._id,
       bar_name: group.bar.name,
       teams: group.assigned_teams,
@@ -544,7 +545,7 @@ function buildRound2ModeC(
   return {
     success: true,
     roundAssignments: round2Groups.map((group, idx) => ({
-      group_id: `group_${group.bar_id}_r2`,
+      group_id: `Round 2`,
       bar_id: group.bar_id,
       bar_name: barMap.get(group.bar_id)?.name || `Bar ${idx + 1}`,
       teams: group.teams,
@@ -794,7 +795,7 @@ function buildRound2ModeB(
   return {
     success: true,
     roundAssignments: round2Groups.map((group, idx) => ({
-      group_id: `group_${group.bar_id}_r2`,
+      group_id: `Round 2`,
       bar_id: group.bar_id,
       bar_name: barMap.get(group.bar_id)?.name || `Bar ${idx + 1}`,
       teams: group.teams,
@@ -1177,7 +1178,7 @@ function buildRound2ModeA(
   return {
     success: true,
     roundAssignments: round2Groups.map((g, idx) => ({
-      group_id: `group_${g.bar_id}_r2`,
+      group_id: `Round 2`,
       bar_id: g.bar_id,
       bar_name: barMap.get(g.bar_id)?.name || `Bar ${idx + 1}`,
       teams: g.teams,
@@ -1508,7 +1509,7 @@ function buildRound3ModeA(
     for (let i = 0; i < targetBars.length; i++) {
       const tb = targetBars[i];
       finalAssignments.push({
-        group_id: `group_${tb.bar_id}_r3_${i + 1}`,
+        group_id: `Round 3`,
         bar_id: tb.bar_id,
         bar_name: tb.bar_name,
         teams: tb.teams,

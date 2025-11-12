@@ -124,51 +124,43 @@ export function TeamFormation() {
                         Age Group
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Males
+                        Number of Participants
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Females
+                        Male Percentage
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Total
+                        Female Percentage
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Male Ratio
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Female Ratio
+                        Status
                       </th>
                     </tr>
                   </thead>
 
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(apiData.generatedData.summary).map(
+                    {Object.entries(apiData?.generatedData.summary).map(
                       ([ageGroup, stats]) => (
                         <tr key={ageGroup}>
                           <td className="px-4 py-3 text-center text-sm font-semibold">
                             {ageGroup}
                           </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {stats.males}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {stats.females}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {stats.total}
-                          </td>
+                          <td className="px-4 py-3 text-center text-sm">{stats.total}</td>
                           <td className="px-4 py-3 text-center text-sm text-blue-600 font-mono">
-                            {stats.maleRatio}
+                            {stats.status !== "Cancelled" ? stats.maleRatio : "-"}
                           </td>
                           <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
-                            {stats.femaleRatio}
+                            {stats.status !== "Cancelled" ? stats.femaleRatio : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
+                            {stats.status}
                           </td>
                         </tr>
                       )
                     )}
                   </tbody>
                 </table>
-
+                
                 <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
                   Generated Participants ({apiData.generaredParticipants.length}
                   )
