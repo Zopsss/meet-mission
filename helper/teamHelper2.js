@@ -15,6 +15,21 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
     byAge.get(t.age_group).push(t);
   }
 
+  // Track bar capacity usage per round across all age groups
+  // Structure: { round: { bar_id: { total_capacity, remaining_capacity } } }
+  const barCapacityTracker = {};
+  
+  // Initialize tracker for all rounds (up to 3 rounds)
+  for (let round = 1; round <= 3; round++) {
+    barCapacityTracker[round] = {};
+    for (const bar of allBars) {
+      barCapacityTracker[round][bar._id] = {
+        total_capacity: bar.available_spots,
+        remaining_capacity: bar.available_spots
+      };
+    }
+  }
+
   for (const [age_group, teams] of byAge.entries()) {
     const teamCount = teams.length;
     const participantCount = getParticipantCount(teams);
@@ -73,7 +88,8 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
     const round1Result = assignTeamsToBarsForRound1(
       teams,
       allBars,
-      distribution
+      distribution,
+      barCapacityTracker
     );
 
     if (round1Result.error) {
@@ -111,7 +127,8 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
         pairHistory,
         mode,
         distribution,
-        teamBarHistory
+        teamBarHistory,
+        barCapacityTracker
       );
 
       if (round2Result.error) {
@@ -139,7 +156,8 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
           round2Assignments,
           pairHistory,
           teamBarHistory,
-          notes
+          notes,
+          barCapacityTracker
         );
 
         if (round3Result.error) {
@@ -297,7 +315,7 @@ function calculateGroupDistribution(totalTeams, teams = null, mode = null) {
 /**
  * Assigns teams to the best available bars for Round 1 based on a calculated distribution.
  */
-function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
+function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution, barCapacityTracker) {
   const numberOfGroups = groupDistribution.length;
 
   if (availableBars.length < numberOfGroups) {
@@ -306,8 +324,24 @@ function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
     };
   }
 
-  const sortedBars = [...availableBars].sort(
-    (a, b) => b.available_spots - a.available_spots
+  // Filter bars that have remaining capacity in round 1
+  const barsWithCapacity = availableBars.filter(bar => {
+    const tracker = barCapacityTracker[1][bar._id];
+    return tracker && tracker.remaining_capacity > 0;
+  });
+
+  if (barsWithCapacity.length < numberOfGroups) {
+    return {
+      error: `Not enough bars with available capacity for Round 1. Need ${numberOfGroups}, but only have ${barsWithCapacity.length}.`,
+    };
+  }
+
+  const sortedBars = [...barsWithCapacity].sort(
+    (a, b) => {
+      const remainingA = barCapacityTracker[1][a._id].remaining_capacity;
+      const remainingB = barCapacityTracker[1][b._id].remaining_capacity;
+      return remainingB - remainingA;
+    }
   );
   const selectedBars = sortedBars.slice(0, numberOfGroups);
   const sortedDistribution = [...groupDistribution].sort((a, b) => b - a);
@@ -332,9 +366,11 @@ function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
       requiredSeats++;
     }
 
-    if (bar.available_spots < requiredSeats) {
+    const remainingCapacity = barCapacityTracker[1][bar._id].remaining_capacity;
+    
+    if (remainingCapacity < requiredSeats) {
       return {
-        error: `Bar capacity issue. Bar '${bar.name}' has ${bar.available_spots} spots, but a group of ${targetTeamCount} teams requires ${requiredSeats} seats.`,
+        error: `Bar capacity issue. Bar '${bar.name}' has ${remainingCapacity} remaining spots in Round 1, but a group of ${targetTeamCount} teams requires ${requiredSeats} seats.`,
       };
     }
 
@@ -342,6 +378,7 @@ function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
       bar: bar,
       target_team_count: targetTeamCount,
       assigned_teams: [],
+      required_seats: requiredSeats,
     });
   }
 
@@ -361,6 +398,11 @@ function assignTeamsToBarsForRound1(teams, availableBars, groupDistribution) {
         };
       }
     }
+  }
+
+  // Update the capacity tracker for Round 1
+  for (const group of round1Blueprint) {
+    barCapacityTracker[1][group.bar._id].remaining_capacity -= group.required_seats;
   }
 
   return {
@@ -384,7 +426,8 @@ function buildRound2(
   pairHistory,
   mode,
   round1Distribution,
-  teamBarHistory
+  teamBarHistory,
+  barCapacityTracker
 ) {
   const notes = [];
 
@@ -395,7 +438,8 @@ function buildRound2(
       round1Assignments,
       pairHistory,
       notes,
-      teamBarHistory
+      teamBarHistory,
+      barCapacityTracker
     );
   } else if (mode === "B") {
     return buildRound2ModeB(
@@ -404,7 +448,8 @@ function buildRound2(
       round1Assignments,
       pairHistory,
       notes,
-      teamBarHistory
+      teamBarHistory,
+      barCapacityTracker
     );
   } else if (mode === "A") {
     return buildRound2ModeA(
@@ -414,7 +459,8 @@ function buildRound2(
       pairHistory,
       round1Distribution,
       notes,
-      teamBarHistory
+      teamBarHistory,
+      barCapacityTracker
     );
   }
 
@@ -432,40 +478,48 @@ function buildRound2ModeC(
   round1Assignments,
   pairHistory,
   notes,
-  teamBarHistory
+  teamBarHistory,
+  barCapacityTracker
 ) {
   const group1Teams = round1Assignments[0].teams || []; // e.g., Velvet
   const group2Teams = round1Assignments[1].teams || []; // e.g., Curtain
   const bar1 = round1Assignments[0].bar_id;
   const bar2 = round1Assignments[1].bar_id;
 
-  // get the bars which were NOT used in round 1 (preserves allBars order)
+  // get the bars which were NOT used in round 1 and have remaining capacity
   const barsNotUsedInRound1 = allBars.filter(
-    (bar) => bar._id !== bar1 && bar._id !== bar2
+    (bar) => {
+      const notUsed = bar._id !== bar1 && bar._id !== bar2;
+      const hasCapacity = barCapacityTracker[2][bar._id].remaining_capacity > 0;
+      return notUsed && hasCapacity;
+    }
   );
 
   if (barsNotUsedInRound1.length < 2) {
     return {
-      error: `Violation in Round 2 Mode C: Need 2 new bars but only found ${barsNotUsedInRound1.length}.`,
+      error: `Violation in Round 2 Mode C: Need 2 new bars with capacity but only found ${barsNotUsedInRound1.length}.`,
     };
   }
+
+  // Sort by remaining capacity
+  barsNotUsedInRound1.sort((a, b) => 
+    barCapacityTracker[2][b._id].remaining_capacity - barCapacityTracker[2][a._id].remaining_capacity
+  );
 
   const largestBar = barsNotUsedInRound1[0];
   const secondLargestBar = barsNotUsedInRound1[1];
 
-  const cap1 = largestBar.available_spots;
-  const cap2 = secondLargestBar.available_spots;
+  const cap1 = barCapacityTracker[2][largestBar._id].remaining_capacity;
+  const cap2 = barCapacityTracker[2][secondLargestBar._id].remaining_capacity;
 
   const totalTeams = teams.length;
   if (cap1 + cap2 < totalTeams) {
     return {
-      error: `Violation in Round 2 Mode C: Combined capacity ${
+      error: `Violation in Round 2 Mode C: Combined remaining capacity ${
         cap1 + cap2
-      } of ${largestBar._id} (${largestBar.available_spots}) and ${
+      } of ${largestBar._id} (${cap1}) and ${
         secondLargestBar._id
-      } (${
-        secondLargestBar.available_spots
-      }) is less than total teams ${totalTeams}.`,
+      } (${cap2}) is less than total teams ${totalTeams}.`,
     };
   }
 
@@ -485,12 +539,12 @@ function buildRound2ModeC(
   // sanity capacity checks
   if (cap1 < newDistribution[0]) {
     return {
-      error: `Violation in Round 2 Mode C: ${largestBar._id} capacity (${cap1}) < required target (${newDistribution[0]}).`,
+      error: `Violation in Round 2 Mode C: ${largestBar._id} remaining capacity (${cap1}) < required target (${newDistribution[0]}).`,
     };
   }
   if (cap2 < newDistribution[1]) {
     return {
-      error: `Violation in Round 2 Mode C: ${secondLargestBar._id} capacity (${cap2}) < required target (${newDistribution[1]}).`,
+      error: `Violation in Round 2 Mode C: ${secondLargestBar._id} remaining capacity (${cap2}) < required target (${newDistribution[1]}).`,
     };
   }
 
@@ -540,6 +594,10 @@ function buildRound2ModeC(
     }
   }
 
+  // Update capacity tracker for Round 2
+  barCapacityTracker[2][largestBar._id].remaining_capacity -= round2Groups[0].teams.length;
+  barCapacityTracker[2][secondLargestBar._id].remaining_capacity -= round2Groups[1].teams.length;
+
   const barMap = new Map(allBars.map((b) => [b._id, b]));
 
   return {
@@ -568,7 +626,8 @@ function buildRound2ModeB(
   round1Assignments, // array length 3: { bar_id, teams: [...] }
   pairHistory, // structure with previous pairings (see pairExists helper)
   notes = [], // array for warnings/info
-  teamBarHistory // Map(team_id -> [bar_ids...]) optional
+  teamBarHistory, // Map(team_id -> [bar_ids...]) optional
+  barCapacityTracker
 ) {
   // --- basic extraction & validation ---
   const group1Teams = round1Assignments[0]?.teams || [];
@@ -578,23 +637,31 @@ function buildRound2ModeB(
   const bar2 = round1Assignments[1]?.bar_id;
   const bar3 = round1Assignments[2]?.bar_id;
 
-  // remove bars used in round 1 (preserve order of allBars)
+  // remove bars used in round 1 and check remaining capacity
   const barsNotUsedInRound1 = allBars.filter(
-    (b) => b._id !== bar1 && b._id !== bar2 && b._id !== bar3
+    (b) => {
+      const notUsed = b._id !== bar1 && b._id !== bar2 && b._id !== bar3;
+      const hasCapacity = barCapacityTracker[2][b._id].remaining_capacity > 0;
+      return notUsed && hasCapacity;
+    }
   );
 
   if (barsNotUsedInRound1.length < 3) {
     return {
-      error: `Violation in Round 2 Mode B: Need 3 new bars but only found ${barsNotUsedInRound1.length}.`,
+      error: `Violation in Round 2 Mode B: Need 3 new bars with capacity but only found ${barsNotUsedInRound1.length}.`,
     };
   }
 
+  // Sort by remaining capacity
+  barsNotUsedInRound1.sort((a, b) => 
+    barCapacityTracker[2][b._id].remaining_capacity - barCapacityTracker[2][a._id].remaining_capacity
+  );
+
   const [largestBar, secondLargestBar, thirdLargestBar] = barsNotUsedInRound1;
 
-  const cap = (b) => b.available_spots ?? b.capacity ?? b.size ?? 0;
-  const cap1 = cap(largestBar),
-    cap2 = cap(secondLargestBar),
-    cap3 = cap(thirdLargestBar);
+  const cap1 = barCapacityTracker[2][largestBar._id].remaining_capacity;
+  const cap2 = barCapacityTracker[2][secondLargestBar._id].remaining_capacity;
+  const cap3 = barCapacityTracker[2][thirdLargestBar._id].remaining_capacity;
 
   const totalTeams = teams.length;
   // Mode B only valid when teams count is 9..11 (per your PDF mapping: 18..23 participants -> 9..11 teams)
@@ -607,7 +674,7 @@ function buildRound2ModeB(
   const newDistribution = calculateGroupDistribution(totalTeams, teams, "B"); // length 3
   if (cap1 + cap2 + cap3 < totalTeams) {
     return {
-      error: `Violation in Round 2 Mode B: Combined capacity (${
+      error: `Violation in Round 2 Mode B: Combined remaining capacity (${
         cap1 + cap2 + cap3
       }) is less than total teams (${totalTeams}).`,
     };
@@ -790,6 +857,11 @@ function buildRound2ModeB(
     }
   }
 
+  // Update capacity tracker for Round 2
+  barCapacityTracker[2][largestBar._id].remaining_capacity -= round2Groups[0].teams.length;
+  barCapacityTracker[2][secondLargestBar._id].remaining_capacity -= round2Groups[1].teams.length;
+  barCapacityTracker[2][thirdLargestBar._id].remaining_capacity -= round2Groups[2].teams.length;
+
   // return same shaped assignment as earlier functions
   const barMap = new Map(allBars.map((b) => [b._id, b]));
   return {
@@ -929,7 +1001,8 @@ function buildRound2ModeA(
   pairHistory,
   round1Distribution,
   notes = [],
-  teamBarHistory
+  teamBarHistory,
+  barCapacityTracker
 ) {
   const numStartGroups = round1Assignments.length;
   const totalTeams = teams.length;
@@ -951,24 +1024,34 @@ function buildRound2ModeA(
   // normalize desiredCounts length
   while (desiredCounts.length < numStartGroups) desiredCounts.push(3);
 
-  // Build candidate bars for round 2 (prefer bars not used in round1)
+  // Build candidate bars for round 2 (prefer bars not used in round1 with remaining capacity)
   const startBarIds = round1Assignments.map((g) => g.bar_id);
   const barsNotUsedInRound1 = allBars.filter(
-    (b) => !startBarIds.includes(b._id)
+    (b) => {
+      const notUsed = !startBarIds.includes(b._id);
+      const hasCapacity = barCapacityTracker[2][b._id].remaining_capacity > 0;
+      return notUsed && hasCapacity;
+    }
+  );
+
+  // Sort by remaining capacity
+  barsNotUsedInRound1.sort((a, b) => 
+    barCapacityTracker[2][b._id].remaining_capacity - barCapacityTracker[2][a._id].remaining_capacity
   );
 
   const round2Bars = [];
-  // prefer new bars
+  // prefer new bars with capacity
   for (const b of barsNotUsedInRound1) {
     round2Bars.push(b);
     if (round2Bars.length === numStartGroups) break;
   }
-  // then start bars with more seats (if still missing)
+  // then start bars with more remaining capacity (if still missing)
   if (round2Bars.length < numStartGroups) {
     const startBarObjs = startBarIds
       .map((id) => allBars.find((b) => b._id === id))
       .filter(Boolean)
-      .sort((a, b) => (b.available_spots || 0) - (a.available_spots || 0));
+      .filter((b) => barCapacityTracker[2][b._id].remaining_capacity > 0)
+      .sort((a, b) => barCapacityTracker[2][b._id].remaining_capacity - barCapacityTracker[2][a._id].remaining_capacity);
     for (const sb of startBarObjs) {
       if (!round2Bars.find((rb) => rb._id === sb._id)) {
         round2Bars.push(sb);
@@ -976,9 +1059,12 @@ function buildRound2ModeA(
       if (round2Bars.length === numStartGroups) break;
     }
   }
-  // finally fill with any bar
+  // finally fill with any bar that has capacity
   if (round2Bars.length < numStartGroups) {
-    for (const b of allBars) {
+    const barsWithCapacity = allBars
+      .filter((b) => barCapacityTracker[2][b._id].remaining_capacity > 0)
+      .sort((a, b) => barCapacityTracker[2][b._id].remaining_capacity - barCapacityTracker[2][a._id].remaining_capacity);
+    for (const b of barsWithCapacity) {
       if (!round2Bars.find((rb) => rb._id === b._id)) {
         round2Bars.push(b);
       }
@@ -989,7 +1075,7 @@ function buildRound2ModeA(
   // final sanity: we must have at least numStartGroups bars to build round2 groups
   if (round2Bars.length < numStartGroups) {
     return {
-      error: `Insufficient distinct bars for round 2 (need ${numStartGroups}).`,
+      error: `Insufficient distinct bars with available capacity for round 2 (need ${numStartGroups}).`,
     };
   }
 
@@ -1002,15 +1088,15 @@ function buildRound2ModeA(
     startOwners: new Set(), // which start-group indices have contributed here (enforce max one)
   }));
 
-  // quick seat feasibility check
+  // quick seat feasibility check using remaining capacity
   const minimalSeatsNeeded = teams.reduce((s, t) => s + teamSeatCount(t), 0);
   const chosenSeats = round2Groups.reduce(
-    (s, g) => s + (g.bar_obj.available_spots || 0),
+    (s, g) => s + barCapacityTracker[2][g.bar_id].remaining_capacity,
     0
   );
   if (chosenSeats < minimalSeatsNeeded) {
     return {
-      error: `Not enough seats in chosen round-2 bars (${chosenSeats}) for ${minimalSeatsNeeded} participant seats.`,
+      error: `Not enough remaining seats in chosen round-2 bars (${chosenSeats}) for ${minimalSeatsNeeded} participant seats.`,
     };
   }
 
@@ -1030,7 +1116,7 @@ function buildRound2ModeA(
         ({ g }) =>
           g.bar_id !== excludeBarId &&
           g.teams.length < g.target_team_count &&
-          seatsUsedIn(g) + seatsNeeded <= (g.bar_obj.available_spots || 0) &&
+          seatsUsedIn(g) + seatsNeeded <= barCapacityTracker[2][g.bar_id].remaining_capacity &&
           !g.startOwners.has(startIndex)
       )
       .sort(
@@ -1087,7 +1173,7 @@ function buildRound2ModeA(
         if (
           g.bar_id !== startBarId &&
           g.teams.length < g.target_team_count &&
-          seatsUsedIn(g) + seats <= (g.bar_obj.available_spots || 0) &&
+          seatsUsedIn(g) + seats <= barCapacityTracker[2][g.bar_id].remaining_capacity &&
           !g.startOwners.has(sIdx)
         ) {
           g.teams.push(teamObj);
@@ -1104,7 +1190,7 @@ function buildRound2ModeA(
           const g = round2Groups[gi];
           if (
             g.teams.length < g.target_team_count &&
-            seatsUsedIn(g) + seats <= (g.bar_obj.available_spots || 0) &&
+            seatsUsedIn(g) + seats <= barCapacityTracker[2][g.bar_id].remaining_capacity &&
             !g.startOwners.has(sIdx)
           ) {
             g.teams.push(teamObj);
@@ -1120,7 +1206,7 @@ function buildRound2ModeA(
         for (let gi = 0; gi < round2Groups.length && !placed; gi++) {
           const g = round2Groups[gi];
           if (
-            seatsUsedIn(g) + seats <= (g.bar_obj.available_spots || 0) &&
+            seatsUsedIn(g) + seats <= barCapacityTracker[2][g.bar_id].remaining_capacity &&
             g.teams.length < 5 // respect hard cap 5
           ) {
             g.teams.push(teamObj);
@@ -1150,16 +1236,15 @@ function buildRound2ModeA(
       )}. Expected 3..5 and difference ≤1.`,
     };
   }
-  // seat checks
+  // seat checks - validate against remaining capacity
   for (const g of round2Groups) {
     const seatsUsed = g.teams.reduce((s, t) => s + teamSeatCount(t), 0);
-    if (seatsUsed > (g.bar_obj.available_spots || 0)) {
+    const remainingCapacity = barCapacityTracker[2][g.bar_id].remaining_capacity;
+    if (seatsUsed > remainingCapacity) {
       return {
         error: `Bar ${
           g.bar_obj._id
-        } over capacity in round 2: requires ${seatsUsed} seats but has ${
-          g.bar_obj.available_spots || 0
-        }.`,
+        } over remaining capacity in round 2: requires ${seatsUsed} seats but has ${remainingCapacity} remaining.`,
       };
     }
   }
@@ -1172,6 +1257,12 @@ function buildRound2ModeA(
         teamBarHistory.get(t.team_id).push(g.bar_id);
       }
     }
+  }
+
+  // Update capacity tracker for Round 2
+  for (const g of round2Groups) {
+    const seatsUsed = g.teams.reduce((s, t) => s + teamSeatCount(t), 0);
+    barCapacityTracker[2][g.bar_id].remaining_capacity -= seatsUsed;
   }
 
   const barMap = new Map(allBars.map((b) => [b._id, b]));
@@ -1212,11 +1303,12 @@ function buildRound3ModeA(
   round2Assignments,
   pairHistory,
   teamBarHistory,
-  notes = []
+  notes = [],
+  barCapacityTracker
 ) {
   // --- helpers & fallbacks ---
   const barMap = new Map(allBars.map((b) => [b._id, b]));
-  const getCapacity = (b) => b?.available_spots ?? b?.capacity ?? 0;
+  const getCapacity = (b) => barCapacityTracker[3][b._id]?.remaining_capacity ?? 0;
   const teamSeatCount = (t) => t.seats ?? t.size ?? (t.members ? t.members.length : 1);
 
   const makePairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -1515,6 +1607,12 @@ function buildRound3ModeA(
         teams: tb.teams,
         subGroups: [tb.teams], // single subgroup per bar (you can split later if needed)
       });
+    }
+
+    // Update capacity tracker for Round 3
+    for (const tb of targetBars) {
+      const seatsUsed = tb.teams.reduce((s, t) => s + teamSeatCount(t), 0);
+      barCapacityTracker[3][tb.bar_id].remaining_capacity -= seatsUsed;
     }
 
     return { success: true, roundAssignments: finalAssignments, notes };
