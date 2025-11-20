@@ -254,7 +254,6 @@ api.post("/api/test/groupAndBarsModified", (req, res) => {
     }
 
     
-    console.log("summary: ", summary);
     res.status(200).json({
       message: "Successfully generated simplified group and bar summary.",
       notes: [...teamNotes, ...schedulerNotes],

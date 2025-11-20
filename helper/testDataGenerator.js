@@ -267,6 +267,8 @@ function generateBarData(barInputs) {
       available_spots: Number(input.capacity) || 20, // Default to 20 if capacity is invalid
     });
   }
+  
+  console.log("generated Bars: ", bars);
   return bars;
 }
 
