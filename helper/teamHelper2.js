@@ -91,8 +91,7 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
     const teamBarHistory = new Map();
     for (const group of round1Assignments) {
       for (const team of group.teams) {
-        console.log("team for bar history: ", team);
-        teamBarHistory.set(team.team_name, [group.bar_id]);
+        teamBarHistory.set(team.team_id, [group.bar_id]);
       }
     }
 
@@ -111,7 +110,13 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
         pairHistory,
         mode,
         distribution,
+<<<<<<< Updated upstream
         teamBarHistory
+=======
+        teamBarHistory,
+        barCapacityTracker,
+        age_group
+>>>>>>> Stashed changes
       );
 
       if (round2Result.error) {
@@ -139,7 +144,13 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
           round2Assignments,
           pairHistory,
           teamBarHistory,
+<<<<<<< Updated upstream
           notes
+=======
+          notes,
+          barCapacityTracker,
+          age_group
+>>>>>>> Stashed changes
         );
 
         if (round3Result.error) {
@@ -384,7 +395,13 @@ function buildRound2(
   pairHistory,
   mode,
   round1Distribution,
+<<<<<<< Updated upstream
   teamBarHistory
+=======
+  teamBarHistory,
+  barCapacityTracker,
+  age_group
+>>>>>>> Stashed changes
 ) {
   const notes = [];
 
@@ -395,7 +412,13 @@ function buildRound2(
       round1Assignments,
       pairHistory,
       notes,
+<<<<<<< Updated upstream
       teamBarHistory
+=======
+      teamBarHistory,
+      barCapacityTracker,
+      age_group
+>>>>>>> Stashed changes
     );
   } else if (mode === "B") {
     return buildRound2ModeB(
@@ -404,7 +427,13 @@ function buildRound2(
       round1Assignments,
       pairHistory,
       notes,
+<<<<<<< Updated upstream
       teamBarHistory
+=======
+      teamBarHistory,
+      barCapacityTracker,
+      age_group
+>>>>>>> Stashed changes
     );
   } else if (mode === "A") {
     return buildRound2ModeA(
@@ -414,7 +443,13 @@ function buildRound2(
       pairHistory,
       round1Distribution,
       notes,
+<<<<<<< Updated upstream
       teamBarHistory
+=======
+      teamBarHistory,
+      barCapacityTracker,
+      age_group
+>>>>>>> Stashed changes
     );
   }
 
@@ -432,7 +467,13 @@ function buildRound2ModeC(
   round1Assignments,
   pairHistory,
   notes,
+<<<<<<< Updated upstream
   teamBarHistory
+=======
+  teamBarHistory,
+  barCapacityTracker,
+  age_group
+>>>>>>> Stashed changes
 ) {
   const group1Teams = round1Assignments[0].teams || []; // e.g., Velvet
   const group2Teams = round1Assignments[1].teams || []; // e.g., Curtain
@@ -446,7 +487,11 @@ function buildRound2ModeC(
 
   if (barsNotUsedInRound1.length < 2) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode C: Need 2 new bars but only found ${barsNotUsedInRound1.length}.`,
+=======
+      error: `Violation in ${age_group} age group, Round 2: Need 2 new bars with capacity but only found ${barsNotUsedInRound1.length}.`,
+>>>>>>> Stashed changes
     };
   }
 
@@ -459,7 +504,11 @@ function buildRound2ModeC(
   const totalTeams = teams.length;
   if (cap1 + cap2 < totalTeams) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode C: Combined capacity ${
+=======
+      error: `Violation in ${age_group} age group, Round 2: Combined remaining capacity ${
+>>>>>>> Stashed changes
         cap1 + cap2
       } of ${largestBar._id} (${largestBar.available_spots}) and ${
         secondLargestBar._id
@@ -485,12 +534,20 @@ function buildRound2ModeC(
   // sanity capacity checks
   if (cap1 < newDistribution[0]) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode C: ${largestBar._id} capacity (${cap1}) < required target (${newDistribution[0]}).`,
+=======
+      error: `Violation in ${age_group} age group, Round 2: ${largestBar._id} remaining capacity (${cap1}) < required target (${newDistribution[0]}).`,
+>>>>>>> Stashed changes
     };
   }
   if (cap2 < newDistribution[1]) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode C: ${secondLargestBar._id} capacity (${cap2}) < required target (${newDistribution[1]}).`,
+=======
+      error: `Violation in ${age_group} age group, Round 2: ${secondLargestBar._id} remaining capacity (${cap2}) < required target (${newDistribution[1]}).`,
+>>>>>>> Stashed changes
     };
   }
 
@@ -568,7 +625,13 @@ function buildRound2ModeB(
   round1Assignments, // array length 3: { bar_id, teams: [...] }
   pairHistory, // structure with previous pairings (see pairExists helper)
   notes = [], // array for warnings/info
+<<<<<<< Updated upstream
   teamBarHistory // Map(team_id -> [bar_ids...]) optional
+=======
+  teamBarHistory, // Map(team_id -> [bar_ids...]) optional
+  barCapacityTracker,
+  age_group
+>>>>>>> Stashed changes
 ) {
   // --- basic extraction & validation ---
   const group1Teams = round1Assignments[0]?.teams || [];
@@ -585,7 +648,11 @@ function buildRound2ModeB(
 
   if (barsNotUsedInRound1.length < 3) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode B: Need 3 new bars but only found ${barsNotUsedInRound1.length}.`,
+=======
+      error: `Violation in Round 2 ${age_group} age group Mode B: Need 3 new bars with capacity but only found ${barsNotUsedInRound1.length}.`,
+>>>>>>> Stashed changes
     };
   }
 
@@ -597,17 +664,21 @@ function buildRound2ModeB(
     cap3 = cap(thirdLargestBar);
 
   const totalTeams = teams.length;
-  // Mode B only valid when teams count is 9..11 (per your PDF mapping: 18..23 participants -> 9..11 teams)
+  // Mode B only valid when teams count is 9..11
   if (totalTeams < 9 || totalTeams > 11) {
     return {
-      error: `Mode B Round 2 expected 9..11 teams (9..11). Got ${totalTeams}.`,
+      error: `Violation in Round 2 ${age_group} age group, expected 9-11 teams Got ${totalTeams}.`,
     };
   }
 
   const newDistribution = calculateGroupDistribution(totalTeams, teams, "B"); // length 3
   if (cap1 + cap2 + cap3 < totalTeams) {
     return {
+<<<<<<< Updated upstream
       error: `Violation in Round 2 Mode B: Combined capacity (${
+=======
+      error: `Violation in Round 2 ${age_group} age group: Combined remaining capacity (${
+>>>>>>> Stashed changes
         cap1 + cap2 + cap3
       }) is less than total teams (${totalTeams}).`,
     };
@@ -616,15 +687,15 @@ function buildRound2ModeB(
   // per-target capacity sanity
   if (cap1 < newDistribution[0])
     return {
-      error: `Capacity ${cap1} of ${largestBar._id} < required ${newDistribution[0]}`,
+      error: `Violation in Round 2 ${age_group} age group. Capacity ${cap1} of ${largestBar._id} < required ${newDistribution[0]}`,
     };
   if (cap2 < newDistribution[1])
     return {
-      error: `Capacity ${cap2} of ${secondLargestBar._id} < required ${newDistribution[1]}`,
+      error: `Violation in Round 2 ${age_group} age group. Capacity ${cap2} of ${secondLargestBar._id} < required ${newDistribution[1]}`,
     };
   if (cap3 < newDistribution[2])
     return {
-      error: `Capacity ${cap3} of ${thirdLargestBar._id} < required ${newDistribution[2]}`,
+      error: `Violation in Round 2 ${age_group} age group. Capacity ${cap3} of ${thirdLargestBar._id} < required ${newDistribution[2]}`,
     };
 
   // prepare round2 groups
@@ -762,7 +833,7 @@ function buildRound2ModeB(
 
   if (unresolved > 0) {
     notes.push(
-      `Mode B: ${unresolved} pairing conflict(s) could not be auto-resolved; please inspect pairHistory or consider manual swaps.`
+      `Violation in ${age_group} age group Round 2 Mode B: ${unresolved} pairing conflict(s) could not be auto-resolved; please inspect pairHistory or consider manual swaps.`
     );
   }
 
@@ -935,11 +1006,11 @@ function buildRound2ModeA(
   const totalTeams = teams.length;
 
   if (totalTeams < 12) {
-    return { error: `Mode A requires at least 12 teams; got ${totalTeams}.` };
+    return { error: `Age Group ${age_group}: Mode A requires at least 12 teams; got ${totalTeams}.` };
   }
   if (numStartGroups < 4) {
     notes.push(
-      `Warning: Mode A ideally expects at least 4 start groups; got ${numStartGroups}.`
+      `Age Group ${age_group}: Mode A ideally expects at least 4 start groups; got ${numStartGroups}.`
     );
   }
 
@@ -989,7 +1060,11 @@ function buildRound2ModeA(
   // final sanity: we must have at least numStartGroups bars to build round2 groups
   if (round2Bars.length < numStartGroups) {
     return {
+<<<<<<< Updated upstream
       error: `Insufficient distinct bars for round 2 (need ${numStartGroups}).`,
+=======
+      error: `Violation in Age Group ${age_group}, Mode A: Insufficient distinct bars with available capacity for round 2 (need ${numStartGroups}).`,
+>>>>>>> Stashed changes
     };
   }
 
@@ -1010,7 +1085,11 @@ function buildRound2ModeA(
   );
   if (chosenSeats < minimalSeatsNeeded) {
     return {
+<<<<<<< Updated upstream
       error: `Not enough seats in chosen round-2 bars (${chosenSeats}) for ${minimalSeatsNeeded} participant seats.`,
+=======
+      error: `Violation in Age Group ${age_group}, Mode A: Not enough remaining seats in chosen round-2 bars (${chosenSeats}) for ${minimalSeatsNeeded} participant seats.`,
+>>>>>>> Stashed changes
     };
   }
 
@@ -1061,7 +1140,7 @@ function buildRound2ModeA(
     if (!moved) {
       // we will try to balance later — note but don't fail immediately
       notes.push(
-        `Could not move any team from start-group ${sIdx} away from its original bar in Round 2 (will attempt to balance otherwise).`
+        `Violation in Age Group ${age_group}, Mode A: Could not move any team from start-group ${sIdx} away from its original bar in Round 2 (will attempt to balance otherwise).`
       );
     }
   }
@@ -1133,7 +1212,7 @@ function buildRound2ModeA(
 
       if (!placed) {
         return {
-          error: `Unable to place team ${teamObj.team_id} in round 2 without breaking seat or group-size constraints. Consider adding bars or seats.`,
+          error: `Violation in Age Group ${age_group}, Mode A: Unable to place team ${teamObj.team_id} in round 2 without breaking seat or group-size constraints. Consider adding bars or seats.`,
         };
       }
     }
@@ -1145,9 +1224,9 @@ function buildRound2ModeA(
   const maxC = Math.max(...counts);
   if (minC < 3 || maxC > 5 || maxC - minC > 1) {
     return {
-      error: `Round 2 group-size constraints violated: groups sizes ${counts.join(
+      error: `Violation in Age Group ${age_group}, Mode A: Round 2 group-size constraints violated: groups sizes ${counts.join(
         ", "
-      )}. Expected 3..5 and difference ≤1.`,
+      )}. Expected 3-5 and difference ≤1.`,
     };
   }
   // seat checks
@@ -1155,11 +1234,15 @@ function buildRound2ModeA(
     const seatsUsed = g.teams.reduce((s, t) => s + teamSeatCount(t), 0);
     if (seatsUsed > (g.bar_obj.available_spots || 0)) {
       return {
-        error: `Bar ${
+        error: `Violation in Age Group ${age_group}, Mode A: Bar ${
           g.bar_obj._id
+<<<<<<< Updated upstream
         } over capacity in round 2: requires ${seatsUsed} seats but has ${
           g.bar_obj.available_spots || 0
         }.`,
+=======
+        } over remaining capacity in round 2, requires ${seatsUsed} seats but has ${remainingCapacity} remaining.`,
+>>>>>>> Stashed changes
       };
     }
   }
@@ -1212,7 +1295,13 @@ function buildRound3ModeA(
   round2Assignments,
   pairHistory,
   teamBarHistory,
+<<<<<<< Updated upstream
   notes = []
+=======
+  notes = [],
+  barCapacityTracker,
+  age_group
+>>>>>>> Stashed changes
 ) {
   // --- helpers & fallbacks ---
   const barMap = new Map(allBars.map((b) => [b._id, b]));
@@ -1267,7 +1356,7 @@ function buildRound3ModeA(
       const maxS = Math.max(...sizes);
       if (minS >= 3 && maxS <= 5 && maxS - minS <= 1) return { distribution: sizes, groups: g };
     }
-    return { error: `Cannot compute a valid distribution for ${totalTeams} teams (Mode A).` };
+    return { error: `Violation in Age Group ${age_group}, Round 3 Mode A: Cannot compute a valid distribution for ${totalTeams} teams.` };
   }
 
   const totalTeams = teams.length;
@@ -1523,7 +1612,7 @@ function buildRound3ModeA(
   // if all candidate sets failed:
   return {
     error:
-      "Unable to build round 3 assignments under constraints (no team may return to its round-1 bar) with current bars/seats. Consider increasing available bars or seats, or accept looser distribution.",
+      `Violation in Age Group ${age_group}, Round 3, Mode A: Unable to build assignments under constraints (no team may return to its round-1 bar) with current bars/seats. Consider increasing available bars or seats, or accept looser distribution.`,
   };
 }
 
@@ -1721,6 +1810,8 @@ function updateTeamBarHistory(roundAssignments, teamBarHistory) {
  */
 function validateAllTeamSequences(teamBarHistory, mode) {
   const errors = [];
+  
+  console.log("teamBarHistory: ", teamBarHistory);
 
   for (const [teamId, barSequence] of teamBarHistory.entries()) {
     const validation = validateBarSequence(barSequence, mode);
@@ -1741,14 +1832,9 @@ function validateAllTeamSequences(teamBarHistory, mode) {
  */
 function validateBarSequence(barSequence, mode) {
   if (mode === "B" || mode === "C") {
-    // Must be A → B (two different bars)
-    if (barSequence.length !== 2) {
-      return {
-        valid: false,
-        error: `Expected 2 rounds, got ${barSequence.length}`,
-      };
-    }
     if (barSequence[0] === barSequence[1]) {
+      console.log("barSequence[0]: ", barSequence[0]);
+      console.log("barSequence[1]: ", barSequence[1]);
       return {
         valid: false,
         error: "A→A pattern forbidden in 2-round events (must be A→B)",
