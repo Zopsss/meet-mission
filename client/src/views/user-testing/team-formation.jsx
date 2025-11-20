@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import Axios from "axios";
+import { Animate, Card, Table } from 'components/lib';
 
 // Helper: Determine Age Group
 function getAgeGroup(age) {
@@ -10,10 +11,52 @@ function getAgeGroup(age) {
   return "N/A";
 }
 
-// Helper: Assign numeric order to age groups for sorting
-function getAgeGroupOrder(group) {
-  const order = { "20-30": 1, "31-40": 2, "41-50": 3, "50+": 4, "N/A": 5 };
-  return order[group] || 99;
+// Format participants data for Table component
+function formatParticipantsData(participants) {
+  return participants.map((p) => ({
+    id: p._id,
+    _id: p._id?.substring(0, 8) + "...",
+    first_name: p.first_name,
+    last_name: p.last_name,
+    gender: p.gender,
+    date_of_birth: p.date_of_birth || "-",
+    age: p.age || "-",
+    age_group: getAgeGroup(p.age),
+  }));
+}
+
+// Format teams data for Table component
+function formatTeamsData(teams) {
+  return teams.map((team) => {
+    const [m1, m2, m3] = team.members;
+    return {
+      id: team.team_id,
+      team_id: team.team_id?.substring(0, 8) + "...",
+      member_1: m1
+        ? `${m1.first_name} ${m1.last_name} (${m1.gender}, ${m1.age})`
+        : "-",
+      member_2: m2
+        ? `${m2.first_name} ${m2.last_name} (${m2.gender}, ${m2.age})`
+        : "-",
+      member_3: m3
+        ? `${m3.first_name} ${m3.last_name} (${m3.gender}, ${m3.age})`
+        : "-",
+      already_registered: team.already_registered_together ? "Yes" : "-",
+      age_group: team.age_group,
+    };
+  });
+}
+
+// Format stats data for Table component
+function formatStatsData(summary) {
+  return Object.entries(summary).map(([ageGroup, stats]) => ({
+    id: ageGroup,
+    age_group: ageGroup,
+    participants: stats.total,
+    male_percentage: stats.status !== "Cancelled" ? stats.maleRatio : "-",
+    female_percentage: stats.status !== "Cancelled" ? stats.femaleRatio : "-",
+    status: stats.status,
+  }));
 }
 
 export function TeamFormation() {
@@ -69,229 +112,87 @@ export function TeamFormation() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-4">Team Formation Test</h1>
-          <div className="flex justify-center items-center space-x-4">
-            <input
-              type="number"
-              value={numParticipants}
-              onChange={(e) => setNumParticipants(e.target.value)}
-              placeholder="Enter number of participants"
-              className="border p-2 rounded w-64"
-              disabled={isLoading}
-            />
-            <button
-              className="bg-blue-600 text-white px-4 py-2 ml-4 rounded hover:bg-blue-700 disabled:bg-gray-400"
-              onClick={handleCreateData}
-              disabled={isLoading}
-            >
-              {isLoading ? "Generating..." : "Generate Teams"}
-            </button>
+    <Animate>
+      <div className="w-full">
+        <Card>
+          <div className="text-center mb-6">
+            <h1 className="text-3xl font-bold mb-4">Team Formation Test</h1>
+            <div className="flex justify-center items-center space-x-4 mb-4">
+              <input
+                type="number"
+                value={numParticipants}
+                onChange={(e) => setNumParticipants(e.target.value)}
+                placeholder="Enter number of participants"
+                className="border p-2 rounded w-64 dark:text-white dark:bg-gray-700"
+                disabled={isLoading}
+              />
+              <button
+                className="ml-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                onClick={handleCreateData}
+                disabled={isLoading}
+              >
+                {isLoading ? "Generating..." : "Generate Teams"}
+              </button>
+            </div>
+            <p className="text-sm text-red-500">
+              Note: These are just dummy data. Keep the number of participants high to get more random and accurate results.
+            </p>
           </div>
-          <h1 className="text-sm mb-4 mt-2 text-red-500">Note: These are just dummy data. Keep the number of participants high to get more random and accurate results.</h1>
-        </div>
 
-        <div>
-          {error && <p className="text-red-500 text-center">{error}</p>}
-          {isLoading && <p className="text-center">Loading data...</p>}
-
-          {apiData && (
-            <div className="grid grid-cols-1 lg:grid-cols-2">
-              {/* Participants Table */}
-              <div className="w-full max-w-5xl mt-6">
-                {apiData.notes && apiData.notes.length > 0 && (
-                  <div>
-                    <h2 className="font-semibold mb-4 text-center">Notes:</h2>
-                    <div className="space-y-3">
-                      {apiData.notes.map((note, index) => (
-                        <p key={index} className="text-center">
-                          {note}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
-                  Stats:
-                </h2>
-                <table className="divide-y divide-gray-200 border w-full">
-                  <thead className="bg-gray-100 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Age Group
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Number of Participants
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Male Percentage
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Female Percentage
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(apiData?.generatedData.summary).map(
-                      ([ageGroup, stats]) => (
-                        <tr key={ageGroup}>
-                          <td className="px-4 py-3 text-center text-sm font-semibold">
-                            {ageGroup}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">{stats.total}</td>
-                          <td className="px-4 py-3 text-center text-sm text-blue-600 font-mono">
-                            {stats.status !== "Cancelled" ? stats.maleRatio : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
-                            {stats.status !== "Cancelled" ? stats.femaleRatio : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
-                            {stats.status}
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-                
-                <h2 className="text-xl font-semibold mt-4 mb-4 text-center">
-                  Generated Participants ({apiData.generaredParticipants.length}
-                  )
-                </h2>
-                <div className="overflow-auto max-h-[60vh] rounded flex items-center justify-center">
-                  <table className="divide-y divide-gray-200 border w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Participant ID
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          First Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Last Name
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Gender
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Date Of Birth
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age Group
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {apiData.generaredParticipants.map((p) => (
-                        <tr key={p._id}>
-                          <td className="px-4 py-3 text-center text-sm font-mono">
-                            {p._id?.substring(0, 8)}...
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.first_name}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.last_name}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.gender}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.date_of_birth || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {p.age || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">
-                            {getAgeGroup(p.age)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Teams Table */}
-              <div className="w-full max-w-5xl">
-                <h2 className="text-xl font-semibold mb-4 mt-4 text-center">
-                  Formed Teams ({apiData.teams.length})
-                </h2>
-                <div className="overflow-auto max-h-[60vh] border rounded">
-                  <table className="divide-y divide-gray-200 w-full">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team ID
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 1
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 2
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Team Member 3
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Already Registered Together
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                          Age Group
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {apiData.teams.map((team) => {
-                        const [m1, m2, m3] = team.members;
-                        return (
-                          <tr key={team.team_id}>
-                            <td className="px-4 py-3 text-center text-sm font-mono">
-                              {team.team_id.substring(0, 8)}...
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m1
-                                ? `${m1.first_name} ${m1.last_name} (${m1.gender}, ${m1.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m2
-                                ? `${m2.first_name} ${m2.last_name} (${m2.gender}, ${m2.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {m3
-                                ? `${m3.first_name} ${m3.last_name} (${m3.gender}, ${m3.age})`
-                                : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {team.already_registered_together ? `Yes` : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm">
-                              {team.age_group}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-600">
+              {error}
             </div>
           )}
-        </div>
+        </Card>
+
+        {apiData && (
+          <>
+            {/* Notes Section */}
+            {apiData.notes && apiData.notes.length > 0 && (
+              <Card title="Notes" className="mb-6">
+                <div className="space-y-3">
+                  {apiData.notes.map((note, index) => (
+                    <p key={index} className="text-center">
+                      {note}
+                    </p>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Stats Table */}
+            <Card title={`Stats`} className="mb-6">
+              <Table
+                loading={isLoading}
+                data={formatStatsData(apiData?.generatedData.summary)}
+                show={["age_group", "participants", "male_percentage", "female_percentage", "status"]}
+              />
+            </Card>
+
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Participants Table */}
+              <Card title={`Generated Participants (${apiData.generaredParticipants.length})`}>
+                <Table
+                  loading={isLoading}
+                  data={formatParticipantsData(apiData.generaredParticipants)}
+                  show={["_id", "first_name", "last_name", "gender", "date_of_birth", "age", "age_group"]}
+                />
+              </Card>
+
+              {/* Teams Table */}
+              <Card title={`Formed Teams (${apiData.teams.length})`}>
+                <Table
+                  loading={isLoading}
+                  data={formatTeamsData(apiData.teams)}
+                  show={["team_id", "member_1", "member_2", "member_3", "already_registered", "age_group"]}
+                />
+              </Card>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Animate>
   );
 }
