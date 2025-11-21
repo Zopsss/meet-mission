@@ -1,16 +1,17 @@
 import React, { useState } from "react";
 import Axios from "axios";
+import { Card, Table, Animate } from 'components/lib';
 
 // --- Reusable Accordion Component ---
 const Accordion = ({ title, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 rounded-lg mb-4 bg-white shadow-sm">
+    <div className="border border-gray-200 rounded-lg mb-4 shadow-sm">
       <div
-        className="flex justify-between items-center p-4 cursor-pointer bg-gray-50 rounded-t-lg"
+        className="flex justify-between items-center p-4 cursor-pointer rounded-t-lg"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <h2 className="text-xl font-bold text-gray-700">{title}</h2>
+        <h2 className="text-xl font-bold mr-4">{title}</h2>
         <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">
           {isOpen ? "Hide" : "Show"}
         </button>
@@ -33,6 +34,63 @@ function getAgeGroup(age) {
 function getAgeGroupOrder(group) {
   const order = { "20-30": 1, "31-40": 2, "41-50": 3, "50+": 4 };
   return order[group] || 99;
+}
+
+// --- Stats Table Component ---
+function StatsTable({ stats }) {
+  const statsData = Object.entries(stats).map(([ageGroup, data]) => ({
+    age_group: ageGroup,
+    participants: data.total,
+    male_percentage: data.status !== "Cancelled" ? data.maleRatio : "-",
+    female_percentage: data.status !== "Cancelled" ? data.femaleRatio : "-",
+    status: data.status
+  }));
+
+  return (
+    <Table
+      data={statsData}
+      show={['age_group', 'participants', 'male_percentage', 'female_percentage', 'status']}
+    />
+  );
+}
+
+// --- Age Group Table Component ---
+function AgeGroupTable({ ageGroup, groups }) {
+  const groupsData = groups.map((g, idx) => {
+    if (g.status === "Cancelled") {
+      return {
+        round: "Cancelled",
+        teams: `${g.reason || "No reason provided"}`,
+        participants: "-",
+        bar: "-",
+        seats: "-",
+        _is_cancelled: true
+      };
+    }
+
+    const teamsText = Array.isArray(g.teams)
+      ? g.teams.join(", ")
+      : (typeof g.teams === "string" ? g.teams : "");
+
+    const participantsCount = g.total_participants ?? g.totalParticipants ?? 0;
+    const seats = g.bar_seats ?? g.barSeats ?? g.barCapacity ?? "N/A";
+    const barName = g.bar_name ?? g.barName ?? "-";
+
+    return {
+      round: g.group_name ?? `Group ${idx + 1}`,
+      teams: teamsText,
+      participants: participantsCount,
+      bar: barName,
+      seats: seats
+    };
+  });
+
+  return (
+    <Table
+      data={groupsData}
+      show={['round', 'teams', 'participants', 'bar', 'seats']}
+    />
+  );
 }
 
 // --- Main Component ---
@@ -132,226 +190,146 @@ export function EventScheduler() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 p-4 font-sans">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center bg-white p-6 rounded-lg shadow-md mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">
-            Event Scheduler & Bar Hopping Test
-          </h1>
-          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h1 className="text-red-500 mb-4 text-center">
-              Keep the number of participants and bars high for better testing!
-            </h1>
+    <Animate>
+      <div className="w-full">
+        <Card title="Event Scheduler & Bar Hopping Test" shadow>
+          <div className="max-w-7xl w-fit mx-auto">
+          <div className="bg-red-100 border border-red-300 text-red-600 p-4 rounded mb-6">
+            <h2 className="font-semibold mb-2">Keep the number of participants and bars high for better testing!</h2>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-              {/* --- Left Side: Inputs --- */}
-              <div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Number of Participants
-                  </label>
-                  <input
-                    type="number"
-                    value={numParticipants}
-                    onChange={(e) => setNumParticipants(e.target.value)}
-                    className="border p-2 rounded"
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Configure Bars & Capacities
-                  </label>
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {barInputs.map((bar, index) => (
-                      <div
-                        key={bar.id}
-                        className="flex items-center space-x-2 gap-4 justify-center"
-                      >
-                        <span className="font-semibold text-gray-600 w-16">
-                          Bar {index + 1}:
-                        </span>
-                        <input
-                          type="number"
-                          value={bar.capacity}
-                          onChange={(e) =>
-                            handleBarCapacityChange(bar.id, e.target.value)
-                          }
-                          placeholder="Capacity"
-                          className="border p-2 rounded"
-                          disabled={isLoading}
-                        />
-                        <button
-                          onClick={() => handleRemoveBar(bar.id)}
-                          className="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 disabled:bg-gray-300"
-                          disabled={isLoading || barInputs.length <= 2}
-                        >
-                          X
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    onClick={handleAddBar}
-                    className="mt-3 text-sm font-semibold text-indigo-600 hover:text-indigo-800 disabled:text-gray-400"
-                    disabled={isLoading}
-                  >
-                    + Add another bar
-                  </button>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start ">
+            {/* --- Left Side: Inputs --- */}
+            <div>
+              <div className="mb-4 flex items-center space-y-2 flex-col">
+                <label className="text-sm font-medium text-gray-700 dark:text-white mb-1">
+                  Number of Participants
+                </label>
+                <input
+                  type="number"
+                  value={numParticipants}
+                  onChange={(e) => setNumParticipants(e.target.value)}
+                  className="border p-2 rounded dark:text-white dark:bg-gray-700"
+                  disabled={isLoading}
+                />
               </div>
 
-              {/* --- Right Side: Action Button --- */}
-              <div className="text-center md:text-left pt-6">
+              <div>
+                <label className="block text-sm font-medium text-center text-gray-700 dark:text-white mb-2">
+                  Configure Bars & Capacities
+                </label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                  {barInputs.map((bar, index) => (
+                    <div
+                      key={bar.id}
+                      className="flex items-center space-x-2 gap-4 justify-center"
+                    >
+                      <span className="font-semibold text-white-600 dark:text-white w-16">
+                        Bar {index + 1}:
+                      </span>
+                      <input
+                        type="number"
+                        value={bar.capacity}
+                        onChange={(e) =>
+                          handleBarCapacityChange(bar.id, e.target.value)
+                        }
+                        placeholder="Capacity"
+                        className="border p-2 rounded dark:text-white dark:bg-gray-700"
+                        disabled={isLoading}
+                      />
+                      <button
+                        onClick={() => handleRemoveBar(bar.id)}
+                        className="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 disabled:bg-gray-300"
+                        disabled={isLoading || barInputs.length <= 2}
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                </div>
                 <button
-                  className="bg-blue-600 text-white px-4 py-2 ml-4 rounded hover:bg-blue-700 disabled:bg-gray-400"
-                  onClick={handleGenerateSchedule}
+                  onClick={handleAddBar}
+                  className="mt-3 text-sm font-semibold text-center w-full mb-3 text-indigo-600 hover:text-indigo-800 disabled:text-gray-400"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Generating..." : "Generate Schedule"}
+                  + Add another bar
                 </button>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div>
+            {/* --- Right Side: Action Button --- */}
+            <div className="flex items-end justify-center md:justify-start">
+              <button
+                className="bg-blue-600 text-white p-3 rounded hover:bg-blue-700 disabled:bg-gray-400 w-full md:w-auto"
+                onClick={handleGenerateSchedule}
+                disabled={isLoading}
+              >
+                {isLoading ? "Generating..." : "Generate Schedule"}
+              </button>
+            </div>
+          </div>
+          </div>
+        </Card>
+
+        <div className="mt-6">
           {error && (
-            <p className="text-red-600 text-center text-lg bg-red-100 p-3 rounded-md">
-              {error}
-            </p>
+            <Card className="border-red-300 bg-red-50">
+              <p className="text-red-600 text-center font-semibold">{error}</p>
+            </Card>
           )}
+          
           {isLoading && (
-            <p className="text-center text-lg text-indigo-600">
-              Generating and scheduling...
-            </p>
+            <Card>
+              <p className="text-center text-lg text-indigo-600 font-semibold">
+                Generating and scheduling...
+              </p>
+            </Card>
           )}
 
           {apiData && (
             <div>
-              <Accordion title="Scheduler Notes" defaultOpen={true}>
-                <div className="text-center text-gray-600 space-y-1">
-                  {apiData.notes.length === 0 ? (
-                    <p>No notes returned.</p>
-                  ) : (
-                    apiData.notes.map((note, index) => <p key={index}>{note}</p>)
-                  )}
-                </div>
-              </Accordion>
-              
-              <Accordion title={"Stats"} defaultOpen={true}>
-                <table className="divide-y divide-gray-200 border w-full">
-                  <thead className="bg-gray-100 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Age Group
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Number of Participants
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Male Percentage
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Female Percentage
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
+              <Card noPadding>
+                <Accordion title="Scheduler Notes" defaultOpen={true}>
+                    <div className="text-center text-gray-200 space-y-1">
+                      {apiData.notes.length === 0 ? (
+                        <p>No notes returned.</p>
+                      ) : (
+                        apiData.notes.map((note, index) => <p key={index}>{note}</p>)
+                      )}
+                    </div>
+                </Accordion>
+              </Card>
 
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(apiData.stats).map(
-                      ([ageGroup, stats]) => (
-                        <tr key={ageGroup}>
-                          <td className="px-4 py-3 text-center text-sm font-semibold">
-                            {ageGroup}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm">{stats.total}</td>
-                          <td className="px-4 py-3 text-center text-sm text-blue-600 font-mono">
-                            {stats.status !== "Cancelled" ? stats.maleRatio : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
-                            {stats.status !== "Cancelled" ? stats.femaleRatio : "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center text-sm text-pink-600 font-mono">
-                            {stats.status}
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </Accordion>
+              <Card noPadding>
+                <Accordion title="Stats" defaultOpen={true}>
+                    <StatsTable stats={apiData.stats} />
+                </Accordion>
+              </Card>
 
-              {/* --- Simplified Age Group Summary Tables --- */}
+              {/* --- Age Group Summary Tables --- */}
               {Object.entries(apiData.summary)
                 .sort(([a], [b]) => getAgeGroupOrder(a) - getAgeGroupOrder(b))
                 .map(([ageGroup, groups]) => (
-                  <Accordion
-                    key={ageGroup}
-                    title={`Age Group: ${ageGroup} — ${Array.isArray(groups) ? groups.length : 0} groups`}
-                    defaultOpen={true}
-                  >
-                    {(!Array.isArray(groups) || groups.length === 0) ? (
-                      <div className="text-center text-gray-600">No groups for this age group.</div>
-                    ) : (
-                      <div className="overflow-auto">
-                        <table className="divide-y divide-gray-200 border w-full">
-                          <thead className="bg-gray-100 sticky top-0">
-                            <tr>
-                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Round</th>
-                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Teams</th>
-                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Participants</th>
-                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Bar</th>
-                              <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase">Seats</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {groups.map((g, idx) => {
-                              // If cancelled entry format from backend
-                              if (g.status === "Cancelled") {
-                                return (
-                                  <tr key={`cancel-${idx}`}>
-                                    <td colSpan={5} className="px-4 py-3 text-center text-sm text-red-600">
-                                      Cancelled: {g.reason || "No reason provided"}
-                                    </td>
-                                  </tr>
-                                );
-                              }
-
-                              const teamsText = Array.isArray(g.teams)
-                                ? g.teams.join(", ")
-                                : (typeof g.teams === "string" ? g.teams : "");
-
-                              const participantsCount = g.total_participants ?? g.totalParticipants ?? 0;
-                              const seats = g.bar_seats ?? g.barSeats ?? g.barCapacity ?? "N/A";
-                              const barName = g.bar_name ?? g.barName ?? "-";
-
-                              return (
-                                <tr key={`${ageGroup}-${g.group_name ?? idx}`}>
-                                  <td className="px-4 py-3 text-center text-sm font-semibold">
-                                    {g.group_name ?? `Group ${idx + 1}`}
-                                  </td>
-                                  <td className="px-4 py-3 text-center text-sm">{teamsText}</td>
-                                  <td className="px-4 py-3 text-center text-sm">{participantsCount}</td>
-                                  <td className="px-4 py-3 text-center text-sm">{barName}</td>
-                                  <td className="px-4 py-3 text-center text-sm font-semibold">{seats}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </Accordion>
+                  <Card noPadding>
+                    <Accordion
+                      key={ageGroup}
+                      title={`Age Group: ${ageGroup} — ${Array.isArray(groups) ? groups.length : 0} groups`}
+                      defaultOpen={true}
+                    >
+                      {(!Array.isArray(groups) || groups.length === 0) ? (
+                        <div className="text-center text-gray-600 py-4">
+                          No groups for this age group.
+                        </div>
+                      ) : (
+                        <AgeGroupTable ageGroup={ageGroup} groups={groups} />
+                      )}
+                    </Accordion>
+                  </Card>
                 ))}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </Animate>
   );
 }
