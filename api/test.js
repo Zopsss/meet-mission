@@ -187,29 +187,25 @@ api.post("/api/test/test-groupAndBars", (req, res) => {
 // --- Endpoint 3: Group and Bars (Modified Summary Version) ---
 api.post("/api/test/groupAndBarsModified", (req, res) => {
   try {
-    const { noOfParticipants, bars } = req.body;
+    const { noOfParticipants, bars: barInputs } = req.body;
 
     if (!noOfParticipants || typeof noOfParticipants !== "number" || noOfParticipants < 12) {
       return res.status(400).json({
         message: "Request body must include 'noOfParticipants' as a number greater than 11.",
       });
     }
-    if (!bars || !Array.isArray(bars) || bars.length < 2) {
+    if (!barInputs || !Array.isArray(barInputs) || barInputs.length < 2) {
       return res.status(400).json({
         message: "Request body must include 'bars' as an array with at least 2 bar objects.",
       });
     }
-    
-    const getTeamsOfAnAgeGroup = (ageGroup, teams) => {
-      return teams.filter(team => {
-        return team.age_group === ageGroup;
-      })
-    }
 
     // Step 1: Generate participants and form teams
-    const { participants, summary: stats } = generateParticipantData(noOfParticipants);
+    const { participants, summary } = generateParticipantData(noOfParticipants);
     const { teams, notes: teamNotes } = formTeams({ participants });
 
+    // Step 2: Generate bars
+    const bars = generateBarData(barInputs);
     const barMap = new Map(bars.map((b) => [b._id, b]));
 
     // Step 3: Build groups and rounds
@@ -220,31 +216,9 @@ api.post("/api/test/groupAndBarsModified", (req, res) => {
     const simplifiedReport = {};
 
     for (const [ageGroup, rounds] of Object.entries(groupsAndRounds)) {
-      const teamsInAgeGroup = teams.filter((t) => t.age_group === ageGroup);
-      const participantCount = teamsInAgeGroup.reduce(
-        (sum, team) => sum + team.members.length,
-        0
-      );
+      const ageGroupSummary = [];
 
-      let mode;
-      if (participantCount >= 24) {
-        mode = "A";
-      } else if (participantCount >= 18) {
-        mode = "B";
-      } else {
-        mode = "C";
-      }
-
-      simplifiedReport[ageGroup] = {
-        teams: getTeamsOfAnAgeGroup(ageGroup, teams),
-        rounds: {},
-        mode,
-        totalParticipants: participantCount
-      };
-
-      const roundNumber = {};
       for (const [roundNum, assignments] of Object.entries(rounds)) {
-        roundNumber[roundNum] = [];
         for (const group of assignments) {
           const barDetails = barMap.get(group.bar_id) || {};
           const groupTeams = group.teams.map((t) => t.team_name);
@@ -253,17 +227,18 @@ api.post("/api/test/groupAndBarsModified", (req, res) => {
             0
           );
 
-          roundNumber[roundNum].push({
+          ageGroupSummary.push({
+            round: `Round ${roundNum}`,
             group_name: group.group_id,
             teams: groupTeams,
             total_participants: totalParticipants,
             bar_name: group.bar_name,
             bar_seats: barDetails.available_spots || "N/A",
-          })
+          });
         }
       }
 
-      simplifiedReport[ageGroup].rounds = roundNumber;
+      simplifiedReport[ageGroup] = ageGroupSummary;
     }
 
     // Handle cancelled rounds
@@ -283,13 +258,7 @@ api.post("/api/test/groupAndBarsModified", (req, res) => {
       message: "Successfully generated simplified group and bar summary.",
       notes: [...teamNotes, ...schedulerNotes],
       summary: simplifiedReport,
-      generatedData: {
-        participants,
-        totalParticipants: participants.length,
-        teams,
-        totalTeams: teams.length
-      },
-      stats
+      stats: summary
     });
   } catch (error) {
     console.error("--- [TEST MODIFIED] FAILED ---", error);

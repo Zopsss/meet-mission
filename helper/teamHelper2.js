@@ -66,6 +66,11 @@ function buildGroupsAndRounds(allTeams, allBars = []) {
       mode
     );
 
+    // if (mode === "A") {
+    console.log("distributionResult: ", distributionResult);
+    console.log("teams: ", teams.length);
+    // }
+
     if (distributionResult.error) {
       notes.push(
         `❌ Event canceled for ${age_group}: ${distributionResult.error}`
@@ -231,6 +236,7 @@ function calculateGroupDistribution(totalTeams, teams = null, mode = null) {
 
   if (mode === "B") {
     const noOfParticipants = getParticipantCount(teams);
+    console.log("totalTeams: ", noOfParticipants, typeof noOfParticipants);
     switch (noOfParticipants) {
       case 18:
         return { numberOfGroups: 3, distribution: [3, 3, 3] };
@@ -1821,6 +1827,8 @@ function updateTeamBarHistory(roundAssignments, teamBarHistory) {
  */
 function validateAllTeamSequences(teamBarHistory, mode) {
   const errors = [];
+  
+  console.log("teamBarHistory: ", teamBarHistory);
 
   for (const [teamId, barSequence] of teamBarHistory.entries()) {
     const validation = validateBarSequence(barSequence, mode);
