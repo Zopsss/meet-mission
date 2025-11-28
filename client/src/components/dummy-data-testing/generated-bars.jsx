@@ -2,6 +2,7 @@ import { useState } from "react"
 import { SortableHeader } from "./sortable-header"
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
+import { TableWrapper } from "./table-wrapper"
 
 export function GeneratedBarsTable({ bars }) {
   const [sorting, setSorting] = useState([])
@@ -32,7 +33,7 @@ export function GeneratedBarsTable({ bars }) {
   })
 
   return (
-    <div className="bg-zinc-50 border-2 rounded-lg p-4">
+    <TableWrapper>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -60,6 +61,6 @@ export function GeneratedBarsTable({ bars }) {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableWrapper>
   )
 }

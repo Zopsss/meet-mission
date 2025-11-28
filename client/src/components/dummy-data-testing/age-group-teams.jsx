@@ -3,6 +3,7 @@ import { Accordion } from "./accordion";
 import { SortableHeader } from "./sortable-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { useMemo, useState } from "react";
+import { TableWrapper } from "./table-wrapper";
 
 export function AgeGroupTeamsTable({ teams, highlightedParticipant, onParticipantClick }) {
   return (
@@ -28,7 +29,7 @@ export function TeamsTable({ teams, highlightedParticipant, onParticipantClick, 
     return (
       <span
         className={`cursor-pointer hover:underline ${
-          isHighlighted ? "bg-yellow-200 font-bold px-1 rounded" : ""
+          isHighlighted ? "bg-yellow-200 dark:bg-slate-600 font-bold px-1 rounded" : ""
         }`}
         onClick={(e) => {
           e.stopPropagation()
@@ -111,7 +112,7 @@ export function TeamsTable({ teams, highlightedParticipant, onParticipantClick, 
   }
 
   return (
-    <div className="bg-zinc-50 border-2 rounded-lg p-4">
+    <TableWrapper>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -139,6 +140,6 @@ export function TeamsTable({ teams, highlightedParticipant, onParticipantClick, 
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableWrapper>
   )
 }

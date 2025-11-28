@@ -33,9 +33,9 @@ export function AgeGroupRoundsTabs({
                 return (
                   <div
                     key={idx}
-                    className="bg-zinc-50 border-2 rounded-lg p-4 flex-1 flex flex-col justify-between min-w-[300px]"
+                    className="bg-zinc-50 dark:bg-slate-700/50 dark:border-none border-2 rounded-lg p-4 flex-1 flex flex-col justify-between min-w-[300px]"
                   >
-                    <div className="border-b-2 pb-4 mb-4">
+                    <div className="border-b-2 dark:border-b dark:border-slate-200 pb-4 mb-4">
                       <div className="flex items-center justify-between ">
                         <p>
                           <strong>Group {idx + 1}</strong>
@@ -43,14 +43,14 @@ export function AgeGroupRoundsTabs({
                         <div className="flex items-center gap-3">
                           <Badge
                             className={
-                              "px-2 py-2 rounded-xl bg-zinc-100 border-zinc-200 text-black shadow-none hover:bg-zinc-100"
+                              "px-2 py-2 rounded-xl bg-zinc-100 border-zinc-200 dark:border-none text-black shadow-none hover:bg-zinc-100"
                             }
                           >
                             Total Participants: {group.total_participants}
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex items-center text-zinc-700 text-sm mt-1">
+                      <div className="flex items-center text-zinc-700 text-sm mt-1 dark:text-slate-100">
                         <span className="mr-2">
                           <MapPin size={13} />
                         </span>
@@ -78,7 +78,7 @@ export function AgeGroupRoundsTabs({
                                         key={m.id}
                                         className={`cursor-pointer hover:underline ${
                                           isHighlighted
-                                            ? "bg-yellow-200 font-bold px-1 rounded"
+                                            ? "bg-yellow-200 dark:bg-slate-600 font-bold px-1 rounded"
                                             : ""
                                         }`}
                                         onClick={() =>

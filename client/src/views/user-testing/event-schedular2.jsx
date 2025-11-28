@@ -14,32 +14,11 @@ import { StatsTable } from "@/components/dummy-data-testing/stats-table"
 import { GeneratedBarsTable } from "@/components/dummy-data-testing/generated-bars"
 import { GeneratedParticipantsTable } from "@/components/dummy-data-testing/generated-particiapants"
 
-// --- Helper: Reusable Sortable Column Header ---
-
-// --- Reusable Accordion Component ---
-
-// Helper: Determine Age Group
-function getAgeGroup(age) {
-  if (age >= 20 && age <= 30) return "20-30"
-  if (age >= 31 && age <= 40) return "31-40"
-  if (age >= 41 && age <= 50) return "41-50"
-  if (age > 50) return "50+"
-  return "N/A"
-}
-
 // Helper: Assign numeric order to age groups for sorting
 function getAgeGroupOrder(group) {
   const order = { "20-30": 1, "31-40": 2, "41-50": 3, "50+": 4 }
   return order[group] || 99
 }
-
-// --- COMPONENT: Stats Table ---
-
-// --- COMPONENT: Generated Bars Table ---
-
-// --- COMPONENT: Generated Participants Table ---
-
-// --- COMPONENT: Teams Table (Used for both "Formed Teams" and "AgeGroupTeams") ---
 
 // --- Main Component ---
 export function EventScheduler() {
@@ -92,8 +71,6 @@ export function EventScheduler() {
         noOfParticipants: participants,
         bars: formattedBarInputs,
       })
-
-      console.log("API Response: ", res.data)
 
       const safeGeneratedData = res.data.generatedData || {
         participants: [],
@@ -253,14 +230,14 @@ export function EventScheduler() {
                 <Accordion title="Scheduler Notes" defaultOpen={true}>
                   <div className="text-center space-y-1">
                     {apiData.notes.length === 0 ? (
-                      <p className="p-3 bg-blue-100 rounded-md text-blue-600 text-left">
+                      <p className="p-3 bg-blue-100 dark:bg-blue-950 rounded-md text-blue-600 text-left">
                         No notes returned.
                       </p>
                     ) : (
                       apiData.notes.map((note, index) => (
                         <p
                           key={index}
-                          className="p-3 bg-red-100 rounded-md text-red-600 text-left"
+                          className="p-3 bg-red-100 dark:bg-slate-950 rounded-md text-red-600 dark:text-[#cf4f43] text-left"
                         >
                           {note}
                         </p>
@@ -297,7 +274,6 @@ export function EventScheduler() {
                     participants={apiData.generatedData.participants}
                     highlightedParticipant={highlightedParticipant}
                     onParticipantClick={handleParticipantClick}
-                    getAgeGroup={getAgeGroup}
                   />
                 </Accordion>
               </Card>

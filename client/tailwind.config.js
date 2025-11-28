@@ -13,8 +13,8 @@ module.exports = {
   				'600': '#545491',
   				'700': '#3E3E6B'
   			},
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
+  			// background: 'hsl(var(--background))',
+  			// foreground: 'hsl(var(--foreground))',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
@@ -71,5 +71,5 @@ module.exports = {
   	}
   },
   plugins: [require("tailwindcss-animate")],
-  darkMode: ['class', 'class']
+  darkMode: ['class']
 }

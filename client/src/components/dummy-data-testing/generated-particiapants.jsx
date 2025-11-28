@@ -2,12 +2,20 @@ import { useMemo, useState } from "react"
 import { SortableHeader } from "./sortable-header"
 import { flexRender, getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
+import { TableWrapper } from "./table-wrapper";
+
+function getAgeGroup(age) {
+  if (age >= 20 && age <= 30) return "20-30";
+  if (age >= 31 && age <= 40) return "31-40";
+  if (age >= 41 && age <= 50) return "41-50";
+  if (age > 50) return "50+";
+  return "N/A";
+}
 
 export function GeneratedParticipantsTable({
   participants,
   highlightedParticipant,
   onParticipantClick,
-  getAgeGroup
 }) {
   const [sorting, setSorting] = useState([])
 
@@ -65,7 +73,7 @@ export function GeneratedParticipantsTable({
   })
 
   return (
-    <div className="bg-zinc-50 border-2 rounded-lg p-4">
+    <TableWrapper>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -88,7 +96,7 @@ export function GeneratedParticipantsTable({
               <TableRow
                 key={row.id}
                 className={`cursor-pointer hover:bg-gray-100 ${
-                  isHighlighted ? "bg-yellow-200" : ""
+                  isHighlighted ? "bg-yellow-200 dark:bg-slate-600" : ""
                 }`}
                 onClick={() => onParticipantClick(row.original._id)}
               >
@@ -102,6 +110,6 @@ export function GeneratedParticipantsTable({
           })}
         </TableBody>
       </Table>
-    </div>
+    </TableWrapper>
   )
 }
