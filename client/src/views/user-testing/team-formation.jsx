@@ -1,69 +1,24 @@
 import { useState } from "react";
 import Axios from "axios";
-import { Animate, Card, Table } from 'components/lib';
-
-// Helper: Determine Age Group
-function getAgeGroup(age) {
-  if (age >= 20 && age <= 30) return "20-30";
-  if (age >= 31 && age <= 40) return "31-40";
-  if (age >= 41 && age <= 50) return "41-50";
-  if (age > 50) return "50+";
-  return "N/A";
-}
-
-// Format participants data for Table component
-function formatParticipantsData(participants) {
-  return participants.map((p) => ({
-    id: p._id,
-    _id: p._id?.substring(0, 8) + "...",
-    first_name: p.first_name,
-    last_name: p.last_name,
-    gender: p.gender,
-    date_of_birth: p.date_of_birth || "-",
-    age: p.age || "-",
-    age_group: getAgeGroup(p.age),
-  }));
-}
-
-// Format teams data for Table component
-function formatTeamsData(teams) {
-  return teams.map((team) => {
-    const [m1, m2, m3] = team.members;
-    return {
-      id: team.team_id,
-      team_id: team.team_id?.substring(0, 8) + "...",
-      member_1: m1
-        ? `${m1.first_name} ${m1.last_name} (${m1.gender}, ${m1.age})`
-        : "-",
-      member_2: m2
-        ? `${m2.first_name} ${m2.last_name} (${m2.gender}, ${m2.age})`
-        : "-",
-      member_3: m3
-        ? `${m3.first_name} ${m3.last_name} (${m3.gender}, ${m3.age})`
-        : "-",
-      already_registered: team.already_registered_together ? "Yes" : "-",
-      age_group: team.age_group,
-    };
-  });
-}
-
-// Format stats data for Table component
-function formatStatsData(summary) {
-  return Object.entries(summary).map(([ageGroup, stats]) => ({
-    id: ageGroup,
-    age_group: ageGroup,
-    participants: stats.total,
-    male_percentage: stats.status !== "Cancelled" ? stats.maleRatio : "-",
-    female_percentage: stats.status !== "Cancelled" ? stats.femaleRatio : "-",
-    status: stats.status,
-  }));
-}
+import { Animate, Card } from 'components/lib';
+import { Accordion } from "@/components/dummy-data-testing/accordion";
+import { GeneratedParticipantsTable } from "@/components/dummy-data-testing/generated-particiapants";
+import { Card as ShadcnCard } from "@/components/ui/card";
+import { TeamsTable } from "@/components/dummy-data-testing/age-group-teams";
+import { StatsTable } from "@/components/dummy-data-testing/stats-table";
 
 export function TeamFormation() {
   const [numParticipants, setNumParticipants] = useState("75");
   const [apiData, setApiData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [highlightedParticipant, setHighlightedParticipant] = useState(null);
+  
+  const handleParticipantClick = (participantId) => {
+    setHighlightedParticipant((prev) =>
+      prev === participantId ? null : participantId
+    )
+  }
 
   const handleCreateData = async () => {
     setIsLoading(true);
@@ -162,33 +117,42 @@ export function TeamFormation() {
             )}
 
             {/* Stats Table */}
-            <Card title={`Stats`} className="mb-6">
-              <Table
-                loading={isLoading}
-                data={formatStatsData(apiData?.generatedData.summary)}
-                show={["age_group", "participants", "male_percentage", "female_percentage", "status"]}
-              />
-            </Card>
+            <div className="flex flex-col gap-4 mt-4">
+              <ShadcnCard>
+                <Accordion title="Stats" defaultOpen={true}>
+                  <StatsTable stats={apiData?.generatedData.summary} />
+                </Accordion>
+              </ShadcnCard>
 
-            {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Participants Table */}
-              <Card title={`Generated Participants (${apiData.generaredParticipants.length})`}>
-                <Table
-                  loading={isLoading}
-                  data={formatParticipantsData(apiData.generaredParticipants)}
-                  show={["_id", "first_name", "last_name", "gender", "date_of_birth", "age", "age_group"]}
-                />
-              </Card>
+              <ShadcnCard>
+                <Accordion
+                  title={`Generated Participants (${apiData.generaredParticipants.length})`}
+                  defaultOpen={false}
+                >
+                  <GeneratedParticipantsTable
+                    participants={apiData.generaredParticipants}
+                    highlightedParticipant={highlightedParticipant}
+                    onParticipantClick={handleParticipantClick}
+                  />
+                </Accordion>
+              </ShadcnCard>
 
               {/* Teams Table */}
-              <Card title={`Formed Teams (${apiData.teams.length})`}>
-                <Table
-                  loading={isLoading}
-                  data={formatTeamsData(apiData.teams)}
-                  show={["team_id", "member_1", "member_2", "member_3", "already_registered", "age_group"]}
-                />
-              </Card>
+              <ShadcnCard>
+                <Accordion
+                  title={`Formed Teams (${(apiData.teams || []).length})`}
+                  defaultOpen={true}
+                >
+                  <TeamsTable
+                    teams={
+                      apiData.teams || []
+                    }
+                    highlightedParticipant={highlightedParticipant}
+                    onParticipantClick={handleParticipantClick}
+                  />
+                </Accordion>
+            </ShadcnCard>
             </div>
           </>
         )}
