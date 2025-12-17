@@ -10,4 +10,10 @@ api.get(
   use(waitlistController.getByEventId)
 );
 
+api.post(
+  "/api/event-management/:id/waitlist/send-email",
+  auth.verify("master"),
+  use(waitlistController.sendMassEmail)
+);
+
 module.exports = api;

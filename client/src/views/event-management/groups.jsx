@@ -187,13 +187,7 @@ export function EventGroups(props){
                 col: 'status',
                 value: 'Canceled'
               }},
-              { icon: "clock", action: (data, i) => router(`/event-management/waitlist/${data._id}`),
-                title: "Waiting List",
-                condition: {
-                  col: "status",
-                  value: "Published",
-                },
-              },
+              { icon: "clock", action: (data, i) => router(`/event-management/waitlist/${data._id}`), title: "Waiting List" },
               { icon: 'users', action: (data, i) => router(`/event-management/registered-participants/${data._id}`), title: 'Registered Participants' },
               { icon: 'columns', action: (data, i) => router(`/event-management/teams/${data._id}`), title: 'All Teams' },
               { icon: 'grid', action: (data, i) => router(`/event-management/group/${data._id}`), title: 'All Groups' },

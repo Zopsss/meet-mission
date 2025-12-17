@@ -6,6 +6,7 @@ import {
   useAPI,
   useLocation,
 } from "components/lib";
+import Axios from "axios";
 
 export function WaitlistList() {
   const location = useLocation();
@@ -72,6 +73,32 @@ export function WaitlistList() {
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Export CSV
+          </button>
+          
+          {/* Add spacing */}
+          <div className="w-4" /> 
+
+          <button
+            onClick={async () => {
+              const groups = [...new Set(data.map(d => d.age_group))];
+              if (confirm(`Send availability emails to ${groups.length} age groups?`)) {
+                 for (const group of groups) {
+                     try {
+                        await Axios({
+                          method: "POST",
+                          url: `/api/event-management/${id}/waitlist/send-email`,
+                          data: {
+                            age_group: group
+                          }
+                        })
+                      } catch (e) { console.error(e); }
+                 }
+                 alert("Emails triggered!");
+              }
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Send Emails
           </button>
         </div>
         <Table
