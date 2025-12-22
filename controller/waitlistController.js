@@ -6,6 +6,7 @@ const utility = require("../helper/utility");
 const mongoose = require("mongoose");
 
 const CHECK_FOR_THRESHOLD_START = process.env.CHECK_FOR_THRESHOLD_START || 11;
+const MAXIMUM_ALLOWED_GENDER_RATIO = 60;
 
 const checkGenderRatio = async (mainUser, friend, eventId, age_group, session) => {
   const eventParticipants = await RegisteredParticipant.schema.find({
@@ -51,10 +52,10 @@ const checkGenderRatio = async (mainUser, friend, eventId, age_group, session) =
   const maleRatio = (maleParticipantsCount / totalParticipants) * 100
   const femaleRatio = (femaleParticipantsCount / totalParticipants) * 100
 
-  if (isRegisteringMale && maleRatio > 60) {
+  if (isRegisteringMale && maleRatio > MAXIMUM_ALLOWED_GENDER_RATIO) {
     return false
   }
-  else if (!isRegisteringMale && femaleRatio > 60) {
+  else if (!isRegisteringMale && femaleRatio > MAXIMUM_ALLOWED_GENDER_RATIO) {
     return false
   }
   return true
@@ -71,7 +72,7 @@ exports.sendMassEmail = async function (req, res) {
   utility.assert(age_group, "No Age Group provided");
 
   try {
-     const waitlistedParticipants = await Waitlist.schema.find({ // Use .schema to access model if exported as export.schema = Waitlist
+     const waitlistedParticipants = await Waitlist.schema.find({
       event_id: id,
       age_group: age_group
     }).populate("user_id", "email first_name locale")
@@ -81,7 +82,6 @@ exports.sendMassEmail = async function (req, res) {
     let sentCount = 0;
 
     for (const participant of waitlistedParticipants) {
-        // Need to get Gender from RegisteredParticipant
         const registeredPart = await RegisteredParticipant.schema.findOne(participant.participant_id);
         if (!registeredPart) continue;
 
@@ -98,7 +98,6 @@ exports.sendMassEmail = async function (req, res) {
             continue;
         }
 
-        // Update timestamp
         await Waitlist.schema.findByIdAndUpdate(participant._id, {
             waitlist_email_sent_at: new Date()
         });
@@ -120,7 +119,7 @@ exports.sendMassEmail = async function (req, res) {
                 user_id: participant.user_id._id,
                 participant_id: participant.participant_id,
                 type: 'Register Event',
-                amount: participant.sub_participant_id ? 40 : 20, // Simple logic
+                amount: participant.sub_participant_id ? 40 : 20,
                 event_id: participant.event_id,
                 status: 'unpaid'
              });
